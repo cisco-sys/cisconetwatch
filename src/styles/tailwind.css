@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --background: #0A0F1A;
+  --foreground: #E2E8F0;
+  --primary: #00D4FF;
+  --primary-foreground: #0A0F1A;
+  --secondary: #1A2235;
+  --secondary-foreground: #94A3B8;
+  --accent: #FF6B35;
+  --accent-foreground: #FFFFFF;
+  --muted: #1E2A3A;
+  --muted-foreground: #64748B;
+  --card: #111827;
+  --card-foreground: #E2E8F0;
+  --border: #1E2D3D;
+  --input: #1A2235;
+  --ring: #00D4FF;
+  --radius: 8px;
+  --font-sans: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  h1, h2, h3, h4, h5, h6, p {
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  .text-hero-xl {
+    font-size: clamp(2rem, 4vw, 3.5rem);
+  }
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, #0066AA 100%);
+  }
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+  }
+  .glow-danger {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 2px;
+  }
+  .live-pulse {
+    animation: livePulse 2s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .slide-up {
+    animation: slideUp 0.25s ease-out forwards;
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .scan-line {
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(0, 212, 255, 0.03) 50%,
+      transparent 100%
+    );
+    animation: scanLine 4s linear infinite;
+  }
+  @keyframes scanLine {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+  .metric-highlight {
+    animation: metricHighlight 1s ease-out;
+  }
+  @keyframes metricHighlight {
+    0% { background-color: rgba(0, 212, 255, 0.2); }
+    100% { background-color: transparent; }
+  }
+  .status-up { color: #10B981; }
+  .status-down { color: #EF4444; }
+  .status-degraded { color: #F59E0B; }
+  .status-admin-down { color: #64748B; }
+  .bg-status-up { background-color: rgba(16, 185, 129, 0.15); }
+  .bg-status-down { background-color: rgba(239, 68, 68, 0.15); }
+  .bg-status-degraded { background-color: rgba(245, 158, 11, 0.15); }
+  .border-status-up { border-color: rgba(16, 185, 129, 0.4); }
+  .border-status-down { border-color: rgba(239, 68, 68, 0.4); }
+  .border-status-degraded { border-color: rgba(245, 158, 11, 0.4); }
+  .protocol-snmp { background-color: rgba(59, 130, 246, 0.15); color: #60A5FA; border-color: rgba(59, 130, 246, 0.3); }
+  .protocol-netconf { background-color: rgba(139, 92, 246, 0.15); color: #A78BFA; border-color: rgba(139, 92, 246, 0.3); }
+  .protocol-ssh { background-color: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: rgba(245, 158, 11, 0.3); }
+  .protocol-restconf { background-color: rgba(16, 185, 129, 0.15); color: #34D399; border-color: rgba(16, 185, 129, 0.3); }
+  .protocol-telemetry { background-color: rgba(0, 212, 255, 0.15); color: #00D4FF; border-color: rgba(0, 212, 255, 0.3); }
+  .protocol-icmp { background-color: rgba(244, 114, 182, 0.15); color: #F472B6; border-color: rgba(244, 114, 182, 0.3); }
+}
