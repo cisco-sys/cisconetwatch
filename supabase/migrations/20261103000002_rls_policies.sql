@@ -180,20 +180,12 @@ create policy events_delete on public.events
   for delete to authenticated
   using (public.is_admin());
 
--- SNMP CONFIGS: sensitive — only ops can read/write (not pure read_only / it_management read of secrets)
+-- SNMP CONFIGS: no direct table access for browser roles.
+-- Secrets are ciphertext only; read/write goes through RPCs in migration 05:
+--   get_snmp_config, upsert_snmp_config, get_snmp_secrets_for_collector.
 drop policy if exists snmp_select on public.snmp_configs;
-create policy snmp_select on public.snmp_configs
-  for select to authenticated
-  using (
-    public.can_write_ops()
-    or public.current_app_role() = 'it_management'::public.app_role
-  );
-
 drop policy if exists snmp_write on public.snmp_configs;
-create policy snmp_write on public.snmp_configs
-  for all to authenticated
-  using (public.can_write_ops())
-  with check (public.can_write_ops());
+revoke all on table public.snmp_configs from anon, authenticated;
 
 -- REPORTS
 drop policy if exists reports_select on public.reports;

@@ -162,23 +162,32 @@ create table if not exists public.events (
 create index if not exists idx_events_created on public.events(created_at desc);
 
 -- SNMP config per device
+-- Secrets (community / auth / priv / trap) are stored ONLY as pgcrypto ciphertext
+-- (bytea). See migration 05 + RPCs upsert_snmp_config / get_snmp_config /
+-- get_snmp_secrets_for_collector. Never put plaintext secrets in this table.
 create table if not exists public.snmp_configs (
   id uuid primary key default gen_random_uuid(),
   device_id uuid not null unique references public.devices(id) on delete cascade,
   version text not null default 'v2c' check (version in ('v1','v2c','v3')),
-  community text,
   username text,
   auth_protocol text,
-  auth_password text,
   priv_protocol text,
-  priv_password text,
+  community_enc bytea,
+  auth_password_enc bytea,
+  priv_password_enc bytea,
+  trap_community_enc bytea,
   poll_interval_s int default 60,
   timeout_s int default 5,
   retries int default 3,
   trap_enabled boolean default true,
-  trap_community text,
   updated_at timestamptz not null default now()
 );
+
+comment on table public.snmp_configs is 'SNMP agent settings; secret fields are pgp_sym_encrypt ciphertext only';
+comment on column public.snmp_configs.community_enc is 'Encrypted SNMPv1/v2c community';
+comment on column public.snmp_configs.auth_password_enc is 'Encrypted SNMPv3 auth password';
+comment on column public.snmp_configs.priv_password_enc is 'Encrypted SNMPv3 priv password';
+comment on column public.snmp_configs.trap_community_enc is 'Encrypted trap community';
 
 -- Reports metadata
 create table if not exists public.reports (
