@@ -1,8 +1,11 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+/** Cookie name readable by middleware (must include "sb-" and "access-token"). */
+const AUTH_COOKIE = 'sb-access-token';
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -28,6 +31,21 @@ export function getSupabaseBrowserClient(): SupabaseClient<Database> | null {
     });
   }
   return browserClient;
+}
+
+/**
+ * Sync the current session into a cookie so Next.js middleware can gate routes.
+ * Supabase browser client stores the session in localStorage by default; middleware
+ * only sees cookies, so we mirror the access token here after login / restore.
+ */
+export function syncAuthCookie(session: Session | null): void {
+  if (typeof document === 'undefined') return;
+  if (session?.access_token) {
+    const maxAge = 60 * 60 * 24 * 7; // 7 days
+    document.cookie = `${AUTH_COOKIE}=${encodeURIComponent(session.access_token)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  } else {
+    document.cookie = `${AUTH_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+  }
 }
 
 /** Server-side client (same anon key; respect RLS via user JWT when passed). */

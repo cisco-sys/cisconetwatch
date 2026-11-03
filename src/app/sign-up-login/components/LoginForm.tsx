@@ -1,15 +1,25 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppLogo from '@/components/ui/AppLogo';
-import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import { getSupabaseBrowserClient, syncAuthCookie } from '@/lib/supabase/client';
 
 interface LoginFields {
   email: string;
   password: string;
   remember: boolean;
+}
+
+/** Destino tras el login: solo rutas internas (evita redirecciones abiertas) */
+function getRedirectTarget(): string {
+  if (typeof window === 'undefined') return '/';
+  const target = new URLSearchParams(window.location.search).get('redirect');
+  if (target && target.startsWith('/') && !target.startsWith('//') && !target.startsWith('/sign-up-login')) {
+    return target;
+  }
+  return '/';
 }
 
 function friendlyAuthError(message: string): string {
@@ -34,6 +44,20 @@ export default function LoginForm() {
     formState: { errors },
     setError,
   } = useForm<LoginFields>();
+
+  // Si ya hay una sesión guardada (o renovable), se restaura sin volver a escribir la clave
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const last = Number(sessionStorage.getItem('cnw_auto_restore') ?? 0);
+    if (Date.now() - last < 15000) return; // evita bucles de redirección
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      sessionStorage.setItem('cnw_auto_restore', String(Date.now()));
+      syncAuthCookie(session);
+      window.location.href = getRedirectTarget();
+    });
+  }, []);
 
   const onSubmit = async (data: LoginFields) => {
     setAuthError(null);
@@ -80,8 +104,10 @@ export default function LoginForm() {
         .update({ last_login_at: new Date().toISOString() })
         .eq('id', auth.user.id);
 
+      // El middleware lee la sesión desde una cookie
+      syncAuthCookie(auth.session);
       toast.success('Welcome back');
-      window.location.href = '/';
+      window.location.href = getRedirectTarget();
     } catch {
       setAuthError('Unexpected error while signing in. Please try again.');
     } finally {

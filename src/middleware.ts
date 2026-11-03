@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 /**
  * Lightweight gate: when Supabase is configured, protect app routes.
- * Login path stays public. Claude can tighten with @supabase/ssr later.
+ * Login path stays public. Session is mirrored into the `sb-access-token` cookie
+ * by syncAuthCookie() after login / session restore.
  */
 const PUBLIC_PATHS = ['/sign-up-login', '/api'];
 
@@ -30,12 +31,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSession =
-    request.cookies.getAll().some(
-      (c) =>
-        c.name.includes('sb-') &&
-        (c.name.includes('auth-token') || c.name.includes('access-token'))
-    );
+  const hasSession = request.cookies.getAll().some(
+    (c) =>
+      c.name.includes('sb-') &&
+      (c.name.includes('auth-token') || c.name.includes('access-token')) &&
+      Boolean(c.value)
+  );
 
   if (!hasSession && pathname !== '/sign-up-login') {
     const url = request.nextUrl.clone();
