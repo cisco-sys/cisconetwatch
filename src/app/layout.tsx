@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description:
     'Monitor Cisco devices in real-time via SNMP, NETCONF, SSH, and RESTCONF. AI-powered incident correlation for NOC teams.',
   icons: {
-    icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
   },
 };
 
@@ -42,7 +42,7 @@ export default function RootLayout({
             },
           }}
         />
-</body>
+      </body>
     </html>
   );
 }
