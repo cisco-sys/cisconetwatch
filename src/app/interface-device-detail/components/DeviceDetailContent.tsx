@@ -6,7 +6,9 @@ import VendorBadge from '@/components/ui/VendorBadge';
 import InterfaceTable from './InterfaceTable';
 import TrafficCharts from './TrafficCharts';
 import SNMPOidPanel from './SNMPOidPanel';
+import SNMPConfigPanel from './SNMPConfigPanel';
 import DeviceEventsFeed from './DeviceEventsFeed';
+import PortConfigPanel from './PortConfigPanel';
 import RealtimeTrafficChart from './RealtimeTrafficChart';
 import { Server, RefreshCw, Activity, Wifi } from 'lucide-react';
 
@@ -28,9 +30,11 @@ const device = {
 };
 
 const tabs = [
-  { id: 'tab-interfaces', label: 'Interfaces', badge: 48 },
+  { id: 'tab-interfaces', label: 'Interfaces', badge: 48 as number | null },
   { id: 'tab-traffic', label: 'Traffic & Errors', badge: null },
   { id: 'tab-realtime', label: 'Live Flow', badge: null },
+  { id: 'tab-ports', label: 'Port Config', badge: null },
+  { id: 'tab-snmp-config', label: 'SNMP Config', badge: null },
   { id: 'tab-snmp', label: 'SNMP OIDs', badge: null },
   { id: 'tab-events', label: 'Events', badge: 7 },
 ];
@@ -104,7 +108,7 @@ export default function DeviceDetailContent() {
               }`}
             >
               {tab.id === 'tab-realtime' && <Activity size={13} />}
-              {tab.id === 'tab-snmp' && <Wifi size={13} />}
+              {(tab.id === 'tab-snmp' || tab.id === 'tab-snmp-config') && <Wifi size={13} />}
               {tab.label}
               {tab.badge != null && (
                 <span className={`text-xs rounded-full px-1.5 py-0.5 font-mono ${
@@ -127,6 +131,8 @@ export default function DeviceDetailContent() {
             <RealtimeTrafficChart />
           </div>
         )}
+        {activeTab === 'tab-ports' && <PortConfigPanel />}
+        {activeTab === 'tab-snmp-config' && <SNMPConfigPanel />}
         {activeTab === 'tab-snmp' && <SNMPOidPanel />}
         {activeTab === 'tab-events' && <DeviceEventsFeed />}
       </div>
