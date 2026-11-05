@@ -5,7 +5,7 @@ import { Plus, Loader2, Server } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
-type ProtocolOption = 'SNMP' | 'NETCONF' | 'SSH' | 'RESTCONF' | 'ICMP' | 'TELEMETRY';
+type ProtocolOption = 'SNMP' | 'NETCONF' | 'SSH' | 'RESTCONF' | 'ICMP';
 
 interface FormFields {
   hostname: string;
@@ -122,7 +122,6 @@ export default function DeviceConfigForm() {
             <option value="NETCONF">NETCONF</option>
             <option value="SSH">SSH</option>
             <option value="RESTCONF">RESTCONF</option>
-            <option value="TELEMETRY">TELEMETRY</option>
             <option value="ICMP">ICMP</option>
           </select>
         </div>
