@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import DeviceConfigForm from './DeviceConfigForm';
 import CollectorHealthTable from './CollectorHealthTable';
 
@@ -9,7 +9,7 @@ export default function DeviceConfigContent() {
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Device & Collector Configuration</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Add Cisco devices and configure collection protocols — SNMP, NETCONF, SSH, RESTCONF
+          Add Cisco devices and configure collection protocols — SNMP, NETCONF, SSH, RESTCONF, ICMP, gRPC Telemetry
         </p>
       </div>
       <DeviceConfigForm />
