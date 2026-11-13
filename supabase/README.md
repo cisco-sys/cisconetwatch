@@ -7,6 +7,25 @@
 4. `20261103000004_seed_demo.sql` — optional demo devices/alerts/collectors
 5. `20261103000005_encrypt_snmp_secrets.sql` — **encrypt SNMP secrets at rest** (required if upgrading from plaintext)
 
+## Auth / password reset (required for production)
+In **Supabase Dashboard → Authentication → URL Configuration**:
+
+| Setting | Value |
+|--------|--------|
+| **Site URL** | `https://cisconetwatch-cisco-7ce5.vercel.app` (or your custom domain) |
+| **Redirect URLs** | Include all of: |
+| | `https://cisconetwatch-cisco-7ce5.vercel.app/**` |
+| | `https://cisconetwatch-cisco-7ce5.vercel.app/sign-up-login` |
+| | `https://cisconetwatch-cisco-7ce5.vercel.app/sign-up-login?reset=1` |
+| | `http://localhost:4028/**` (local dev) |
+
+Also check **Authentication → Emails**: template **Reset password** enabled, and SMTP working (or Supabase default email).
+
+App flow:
+1. User clicks **Forgot password?** → `resetPasswordForEmail` with `redirectTo=.../sign-up-login?reset=1`
+2. Email link opens the app → recovery session → **Set a new password** form
+3. `updateUser({ password })` then redirect to dashboard
+
 ## SNMP secrets (important)
 `snmp_configs` does **not** store community / auth_password / priv_password / trap_community in plaintext.
 
@@ -67,11 +86,12 @@ await supabase.rpc('get_snmp_config', { p_device_id: '...' })
 1. Create Supabase project
 2. Run migrations 01→05 in SQL editor (or `supabase db push`)
 3. Set `app.snmp_encryption_key` (see above)
-4. Vercel env:
+4. Configure Auth Site URL + Redirect URLs (see Auth section)
+5. Vercel env:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY` (server/collectors only — never in the browser)
-5. First user: sign up, then set `profiles.role = 'admin'` in SQL for that user id
+6. First user: sign up, then set `profiles.role = 'admin'` in SQL for that user id
 
 ## Security notes
 - All tables have RLS enabled
