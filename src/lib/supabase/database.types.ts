@@ -10,7 +10,8 @@ export type VendorType =
   | 'mikrotik'
   | 'huawei';
 
-export type DeviceStatus = 'up' | 'degraded' | 'down';
+/** unknown = registered but never verified by a collector */
+export type DeviceStatus = 'up' | 'degraded' | 'down' | 'unknown';
 export type ProtocolType = 'SNMP' | 'NETCONF' | 'SSH' | 'RESTCONF' | 'TELEMETRY' | 'ICMP';
 export type AlertSeverity = 'critical' | 'major' | 'minor' | 'info';
 export type CollectorStatus = 'active' | 'degraded' | 'down';
@@ -31,6 +32,7 @@ export interface Profile {
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
+  org_id?: string | null;
 }
 
 export interface Device {
@@ -56,6 +58,7 @@ export interface Device {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  org_id?: string | null;
 }
 
 export interface InterfaceRow {
@@ -98,6 +101,7 @@ export interface Collector {
   config: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  org_id?: string | null;
 }
 
 export interface Alert {
@@ -113,6 +117,7 @@ export interface Alert {
   acknowledged_by: string | null;
   acknowledged_at: string | null;
   created_at: string;
+  org_id?: string | null;
 }
 
 export interface EventRow {
@@ -124,6 +129,7 @@ export interface EventRow {
   protocol: ProtocolType | null;
   trap_oid: string | null;
   created_at: string;
+  org_id?: string | null;
 }
 
 export interface DashboardMetrics {
