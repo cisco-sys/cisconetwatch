@@ -1,6 +1,8 @@
 'use client';
 import React, { useState } from 'react';
 import { Bell, ChevronDown, LogOut, Menu, Search, Shield, User } from 'lucide-react';
+import { CurrentUserBadge, useCurrentUser } from '@/lib/auth/useCurrentUser';
+import { getSupabaseBrowserClient, syncAuthCookie } from '@/lib/supabase/client';
 
 interface TopbarProps {
   onMenuToggle?: () => void;
@@ -8,6 +10,14 @@ interface TopbarProps {
 
 export default function Topbar({ onMenuToggle }: TopbarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { user } = useCurrentUser();
+
+  async function handleSignOut() {
+    const supabase = getSupabaseBrowserClient();
+    await supabase?.auth.signOut();
+    syncAuthCookie(null);
+    window.location.href = '/sign-up-login';
+  }
 
   return (
     <header className="flex items-center justify-between h-14 px-4 sm:px-6 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
@@ -45,20 +55,14 @@ export default function Topbar({ onMenuToggle }: TopbarProps) {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-muted/60 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-semibold text-primary">JR</span>
-            </div>
-            <div className="hidden md:block text-left">
-              <p className="text-xs font-medium text-foreground leading-none">J. Rodriguez</p>
-              <p className="text-xs text-muted-foreground mt-0.5">NOC Operator</p>
-            </div>
+            <CurrentUserBadge />
             <ChevronDown size={14} className="text-muted-foreground hidden md:block" />
           </button>
           {showUserMenu && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-xl z-50 fade-in py-1">
+            <div className="absolute right-0 top-full mt-1 w-56 bg-card border border-border rounded-lg shadow-xl z-50 fade-in py-1">
               <div className="px-3 py-2 border-b border-border">
-                <p className="text-xs font-medium text-foreground">Juan Rodriguez</p>
-                <p className="text-xs text-muted-foreground font-mono">j.rodriguez@netops.corp</p>
+                <p className="text-xs font-medium text-foreground">{user?.fullName ?? '—'}</p>
+                <p className="text-xs text-muted-foreground font-mono truncate">{user?.email ?? ''}</p>
               </div>
               <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
                 <User size={14} />
@@ -69,7 +73,11 @@ export default function Topbar({ onMenuToggle }: TopbarProps) {
                 Security
               </button>
               <div className="border-t border-border mt-1 pt-1">
-                <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors">
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
+                >
                   <LogOut size={14} />
                   Sign Out
                 </button>
