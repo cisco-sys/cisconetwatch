@@ -9,6 +9,8 @@ export interface CurrentUser {
   fullName: string;
   role: AppRole;
   isActive: boolean;
+  orgId: string | null;
+  isPlatformAdmin: boolean;
 }
 
 interface State {
@@ -16,7 +18,7 @@ interface State {
   loading: boolean;
 }
 
-/** Usuario real de la sesión de Supabase + su perfil (nombre y rol). */
+/** Usuario real de la sesión de Supabase + su perfil (nombre, rol, org). */
 export function useCurrentUser(): State {
   const [state, setState] = useState<State>({ user: null, loading: true });
 
@@ -36,7 +38,7 @@ export function useCurrentUser(): State {
       }
       const { data } = await supabase!
         .from('profiles')
-        .select('id,email,full_name,role,is_active')
+        .select('id,email,full_name,role,is_active,org_id,is_platform_admin')
         .eq('id', userId)
         .maybeSingle();
 
@@ -50,6 +52,8 @@ export function useCurrentUser(): State {
           fullName: data?.full_name || profileEmail.split('@')[0] || '',
           role: (data?.role ?? 'read_only') as AppRole,
           isActive: data?.is_active ?? true,
+          orgId: (data as { org_id?: string | null })?.org_id ?? null,
+          isPlatformAdmin: Boolean((data as { is_platform_admin?: boolean })?.is_platform_admin),
         },
       });
     }
@@ -78,7 +82,6 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Reemplazo directo del "J. Rodriguez / NOC Operator" fijo de la cabecera. */
 export function CurrentUserBadge() {
   const { user, loading } = useCurrentUser();
 
@@ -90,6 +93,8 @@ export function CurrentUserBadge() {
     return <span className="text-sm text-muted-foreground">{T.session.guest}</span>;
   }
 
+  const roleLabel = user.isPlatformAdmin ? 'Super Admin' : ROLE_LABEL[user.role];
+
   return (
     <div className="flex items-center gap-2.5">
       <div
@@ -98,9 +103,9 @@ export function CurrentUserBadge() {
       >
         {initials(user.fullName || user.email)}
       </div>
-      <div className="min-w-0 text-left leading-tight">
+      <div className="min-w-0 text-left leading-tight hidden md:block">
         <p className="truncate text-sm font-semibold text-foreground">{user.fullName || user.email}</p>
-        <p className="truncate text-xs text-muted-foreground">{ROLE_LABEL[user.role]}</p>
+        <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
       </div>
     </div>
   );
