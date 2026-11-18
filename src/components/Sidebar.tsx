@@ -2,7 +2,23 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import AppLogo from '@/components/ui/AppLogo';
-import { LayoutDashboard, Network, Users, Settings, BrainCircuit, ChevronLeft, ChevronRight, Activity, X, Bell, FileText, UserCog, Terminal, Workflow } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Network,
+  Users,
+  Settings,
+  BrainCircuit,
+  ChevronLeft,
+  ChevronRight,
+  Activity,
+  X,
+  Bell,
+  FileText,
+  UserCog,
+  Terminal,
+  Workflow,
+  Building2,
+} from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -14,12 +30,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: <LayoutDashboard size={18} />, group: 'Operations' },
-  { label: 'Device Detail', href: '/interface-device-detail', icon: <Network size={18} />, badge: 3, group: 'Operations' },
+  { label: 'Device Detail', href: '/interface-device-detail', icon: <Network size={18} />, group: 'Operations' },
   { label: 'Live Traffic', href: '/interface-device-detail', icon: <Activity size={18} />, group: 'Operations' },
   { label: 'Topology', href: '/topology', icon: <Workflow size={18} />, group: 'Operations' },
-  { label: 'Alertas', href: '/alertas', icon: <Bell size={18} />, badge: 5, group: 'Operations' },
-  { label: 'AI Incident Analysis', href: '/ai-incident-analysis', icon: <BrainCircuit size={18} />, badge: 2, group: 'Operations' },
+  { label: 'Alertas', href: '/alertas', icon: <Bell size={18} />, group: 'Operations' },
+  { label: 'AI Incident Analysis', href: '/ai-incident-analysis', icon: <BrainCircuit size={18} />, group: 'Operations' },
   { label: 'Informes Ejecutivos', href: '/informes-ejecutivos', icon: <FileText size={18} />, group: 'Reports' },
+  { label: 'Empresas', href: '/organizations', icon: <Building2 size={18} />, group: 'Administration' },
   { label: 'Usuarios y Roles', href: '/usuarios-roles', icon: <UserCog size={18} />, group: 'Administration' },
   { label: 'User Management', href: '/user-management', icon: <Users size={18} />, group: 'Administration' },
   { label: 'Device Config', href: '/device-collector-configuration', icon: <Settings size={18} />, group: 'Administration' },
@@ -39,7 +56,7 @@ export default function Sidebar({ currentPath, mobileOpen = false, onMobileClose
   const SidebarInner = ({ forMobile = false }: { forMobile?: boolean }) => (
     <aside
       className="relative flex flex-col bg-card border-r border-border transition-all duration-300 ease-in-out flex-shrink-0 h-full"
-      style={{ width: forMobile ? 240 : (collapsed ? 64 : 240) }}
+      style={{ width: forMobile ? 240 : collapsed ? 64 : 240 }}
     >
       <div className="flex items-center gap-3 px-4 py-4 border-b border-border h-16 overflow-hidden">
         <div className="flex-shrink-0">
@@ -63,32 +80,37 @@ export default function Sidebar({ currentPath, mobileOpen = false, onMobileClose
             {(forMobile || !collapsed) && (
               <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{group}</p>
             )}
-            {navItems.filter((n) => n.group === group).map((item) => {
-              const active = currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
-              return (
-                <Link
-                  key={item.href + item.label}
-                  href={item.href}
-                  onClick={forMobile ? onMobileClose : undefined}
-                  className={`flex items-center gap-3 mx-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    active
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                  title={collapsed && !forMobile ? item.label : undefined}
-                >
-                  <span className="flex-shrink-0">{item.icon}</span>
-                  {(forMobile || !collapsed) && (
-                    <>
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {item.badge != null && item.badge > 0 && (
-                        <span className="text-[10px] font-mono bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5">{item.badge}</span>
-                      )}
-                    </>
-                  )}
-                </Link>
-              );
-            })}
+            {navItems
+              .filter((n) => n.group === group)
+              .map((item) => {
+                const active =
+                  currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
+                return (
+                  <Link
+                    key={item.href + item.label}
+                    href={item.href}
+                    onClick={forMobile ? onMobileClose : undefined}
+                    className={`flex items-center gap-3 mx-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      active
+                        ? 'bg-primary/10 text-primary border border-primary/20'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                    title={collapsed && !forMobile ? item.label : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {(forMobile || !collapsed) && (
+                      <>
+                        <span className="flex-1 truncate">{item.label}</span>
+                        {item.badge != null && item.badge > 0 && (
+                          <span className="text-[10px] font-mono bg-accent/20 text-accent border border-accent/30 rounded-full px-1.5 py-0.5">
+                            {item.badge}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </Link>
+                );
+              })}
           </div>
         ))}
       </nav>
