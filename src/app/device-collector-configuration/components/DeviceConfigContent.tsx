@@ -9,7 +9,8 @@ export default function DeviceConfigContent() {
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Device & Collector Configuration</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Add Cisco devices and configure collection protocols — SNMP, NETCONF, SSH, RESTCONF, ICMP, gRPC Telemetry
+          Production inventory only: devices are stored unverified until a LAN collector reports status.
+          Collectors below are loaded from Supabase — empty means none are registered.
         </p>
       </div>
       <DeviceConfigForm />

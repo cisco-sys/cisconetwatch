@@ -23,7 +23,6 @@ const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 function isValidIpv6(value: string): boolean {
   if (!value.includes(':') || !/^[0-9a-fA-F:.]+$/.test(value)) return false;
   try {
-    // El parser de URL del navegador valida el formato IPv6 completo (::, 8 grupos, IPv4 embebida)
     new URL(`http://[${value}]`);
     return true;
   } catch {
@@ -41,7 +40,7 @@ type CredentialMode = 'none' | 'snmp' | 'userpass';
 function credentialMode(protocol: ProtocolOption): CredentialMode {
   if (protocol === 'ICMP') return 'none';
   if (protocol === 'SNMP') return 'snmp';
-  return 'userpass'; // NETCONF, SSH, RESTCONF, TELEMETRY
+  return 'userpass';
 }
 
 const inputClass =
@@ -58,7 +57,6 @@ export default function DeviceConfigForm() {
     formState: { errors },
   } = useForm<FormFields>({
     defaultValues: { protocol: 'SNMP' },
-    // Los campos de credenciales se descartan al desmontarse (p. ej. al cambiar de protocolo)
     shouldUnregister: true,
   });
 
@@ -92,7 +90,10 @@ export default function DeviceConfigForm() {
         return;
       }
 
-      toast.success(`Device ${device?.name ?? data.hostname} (${data.ip}) saved to inventory`);
+      // Honest messaging: inventory only — no reachability test from the browser/Vercel
+      toast.success(
+        `Device ${device?.name ?? data.hostname} (${data.ip}) saved as unverified. No ping/ICMP was run from this app.`,
+      );
       reset({ protocol: data.protocol });
     } catch {
       toast.error('Unexpected error while saving the device.');
@@ -119,12 +120,11 @@ export default function DeviceConfigForm() {
               validate: (v) => v.trim().length > 0 || 'Required',
             })}
             aria-invalid={!!errors.hostname}
-            aria-describedby={errors.hostname ? 'device-hostname-error' : undefined}
             className={inputClass}
             placeholder="SW-CORE-01"
           />
           {errors.hostname && (
-            <p id="device-hostname-error" role="alert" className="text-xs text-danger mt-1">
+            <p role="alert" className="text-xs text-danger mt-1">
               {errors.hostname.message}
             </p>
           )}
@@ -141,12 +141,11 @@ export default function DeviceConfigForm() {
               validate: (v) => isValidIp(v) || 'Enter a valid IP address',
             })}
             aria-invalid={!!errors.ip}
-            aria-describedby={errors.ip ? 'device-ip-error' : undefined}
             className={`${inputClass} font-mono`}
             placeholder="10.0.0.1"
           />
           {errors.ip && (
-            <p id="device-ip-error" role="alert" className="text-xs text-danger mt-1">
+            <p role="alert" className="text-xs text-danger mt-1">
               {errors.ip.message}
             </p>
           )}
@@ -156,12 +155,7 @@ export default function DeviceConfigForm() {
           <label htmlFor="device-model" className={labelClass}>
             Model
           </label>
-          <input
-            id="device-model"
-            {...register('model')}
-            className={inputClass}
-            placeholder="Catalyst 9300-48P"
-          />
+          <input id="device-model" {...register('model')} className={inputClass} placeholder="Catalyst 9300-48P" />
         </div>
 
         <div>
@@ -171,7 +165,7 @@ export default function DeviceConfigForm() {
           <select id="device-protocol" {...register('protocol')} className={inputClass}>
             {PROTOCOLS.map((p) => (
               <option key={p} value={p}>
-                {p === 'TELEMETRY' ? 'TELEMETRY (gRPC / MDT)' : p}
+                {p === 'TELEMETRY' ? 'TELEMETRY (gRPC / MDT)' : p === 'ICMP' ? 'ICMP (collector ping only)' : p}
               </option>
             ))}
           </select>
@@ -188,7 +182,7 @@ export default function DeviceConfigForm() {
                 autoComplete="off"
                 {...register('community')}
                 className={`${inputClass} font-mono`}
-                placeholder="public / netwatch"
+                placeholder="(stored only via encrypted SNMP panel)"
               />
             </div>
             <div>
@@ -237,18 +231,21 @@ export default function DeviceConfigForm() {
           </>
         )}
 
-        {mode !== 'none' ? (
+        {protocol === 'ICMP' ? (
+          <div className="sm:col-span-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100/90">
+            <p className="font-medium text-amber-200">No ICMP from this web app</p>
+            <p className="mt-1 text-amber-100/80">
+              Browsers and Vercel cannot send ICMP. Private IPs (10.x, 192.168.x) are unreachable from the
+              cloud. Saving only registers the device as <strong>unverified</strong>. A collector on your LAN
+              must run the real ping and write the result to the database.
+            </p>
+          </div>
+        ) : mode !== 'none' ? (
           <p className="sm:col-span-2 text-xs text-muted-foreground">
-            Credentials are not stored yet: only the device record is saved. Credential storage is enabled once
-            encrypted storage is configured.
-            {protocol === 'TELEMETRY' &&
-              ' TELEMETRY uses model-driven telemetry (gRPC), so the collector will need these credentials once storage is enabled.'}
+            Credentials on this form are not sent yet. Device inventory is saved without a reachability test.
+            Use the SNMP panel (encrypted RPCs) for secrets once the collector is online.
           </p>
-        ) : (
-          <p className="sm:col-span-2 text-xs text-muted-foreground">
-            ICMP only checks reachability (ping), so no credentials are required.
-          </p>
-        )}
+        ) : null}
 
         <div className="sm:col-span-2">
           <button
@@ -257,7 +254,7 @@ export default function DeviceConfigForm() {
             className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 transition-colors"
           >
             {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Server size={16} />}
-            {isSaving ? 'Adding...' : 'Add Device'}
+            {isSaving ? 'Saving…' : 'Save to inventory (no connectivity test)'}
           </button>
         </div>
       </form>
