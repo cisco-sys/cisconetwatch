@@ -14,9 +14,9 @@ function fail(status: number, message: string) {
 }
 
 /**
- * Crea un usuario con rol. Solo lo puede usar un administrador activo.
- * Requiere en el servidor (Vercel): NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.
- * La clave de servicio NUNCA debe tener el prefijo NEXT_PUBLIC_.
+ * Crea colaborador en una empresa.
+ * - Platform admin: puede elegir org_id y cualquier rol.
+ * - Company admin: solo su org_id; no puede crear platform admins.
  */
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -34,22 +34,30 @@ export async function POST(req: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // 1) Quién llama y si es administrador activo
   const { data: caller, error: callerError } = await admin.auth.getUser(token);
   if (callerError || !caller.user) return fail(401, 'Sesión no válida.');
 
   const { data: callerProfile } = await admin
     .from('profiles')
-    .select('role,is_active')
+    .select('role,is_active,is_platform_admin,org_id')
     .eq('id', caller.user.id)
     .maybeSingle();
 
-  if (callerProfile?.role !== 'admin' || callerProfile.is_active !== true) {
+  const isPlatform = callerProfile?.is_platform_admin === true;
+  const isCompanyAdmin =
+    callerProfile?.role === 'admin' && callerProfile.is_active === true && !!callerProfile.org_id;
+
+  if (!callerProfile?.is_active || (!isPlatform && !isCompanyAdmin)) {
     return fail(403, 'Solo un administrador puede crear usuarios.');
   }
 
-  // 2) Validar el cuerpo
-  let body: { email?: string; fullName?: string; role?: string; password?: string };
+  let body: {
+    email?: string;
+    fullName?: string;
+    role?: string;
+    password?: string;
+    orgId?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -64,14 +72,27 @@ export async function POST(req: Request) {
   if (!EMAIL_RE.test(email)) return fail(400, 'Correo no válido.');
   if (fullName.length < 2 || fullName.length > 120) return fail(400, 'Nombre no válido.');
   if (!ROLES.includes(role)) return fail(400, 'Rol no válido.');
-  if (password.length < 12 || password.length > 72) return fail(400, 'La contraseña debe tener entre 12 y 72 caracteres.');
+  if (password.length < 12 || password.length > 72) {
+    return fail(400, 'La contraseña debe tener entre 12 y 72 caracteres.');
+  }
 
-  // 3) Crear en Supabase Auth (el trigger handle_new_user crea el perfil como read_only)
+  let orgId: string | null = null;
+  if (isPlatform) {
+    orgId = (body.orgId ?? callerProfile.org_id ?? null) as string | null;
+    if (!orgId) return fail(400, 'Selecciona una empresa (orgId).');
+  } else {
+    orgId = callerProfile.org_id as string;
+    // company admin cannot create another platform path; admin role is company admin only
+  }
+
+  const { data: orgRow } = await admin.from('organizations').select('id').eq('id', orgId).maybeSingle();
+  if (!orgRow) return fail(400, 'Empresa no encontrada.');
+
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName },
+    user_metadata: { full_name: fullName, org_id: orgId },
   });
 
   if (createError || !created.user) {
@@ -82,17 +103,21 @@ export async function POST(req: Request) {
     return fail(500, 'No se pudo crear el usuario.');
   }
 
-  // 4) Asignar rol y nombre (la clave de servicio no tiene auth.uid(), el guard lo permite)
   const { error: profileError } = await admin
     .from('profiles')
-    .update({ role, full_name: fullName, is_active: true })
+    .update({
+      role,
+      full_name: fullName,
+      is_active: true,
+      org_id: orgId,
+      is_platform_admin: false,
+    })
     .eq('id', created.user.id);
 
   if (profileError) {
-    // Deshacer para no dejar un usuario con rol equivocado
     await admin.auth.admin.deleteUser(created.user.id);
     return fail(500, 'No se pudo asignar el rol. No se creó el usuario.');
   }
 
-  return NextResponse.json({ id: created.user.id, email, role }, { status: 201 });
+  return NextResponse.json({ id: created.user.id, email, role, orgId }, { status: 201 });
 }
