@@ -5,7 +5,11 @@
 2. `20261103000002_rls_policies.sql` — RLS + role helpers + profile on signup
 3. `20261103000003_rpc_functions.sql` — RPCs used by the app
 4. `20261103000004_seed_demo.sql` — optional demo devices/alerts/collectors
-5. `20261103000005_encrypt_snmp_secrets.sql` — **encrypt SNMP secrets at rest** (required if upgrading from plaintext)
+5. `20261103000005_encrypt_snmp_secrets.sql` — **encrypt SNMP secrets at rest**
+6. `20261118000006_device_links.sql` — topology links (`device_links`) + RLS
+7. `20261118000007_rls_hardening_and_orgs.sql` — **RLS hardening + multi-tenant `org_id`**
+
+Apply **01 → 07** in order (SQL editor or `supabase db push`).
 
 ## Auth / password reset (required for production)
 In **Supabase Dashboard → Authentication → URL Configuration**:
@@ -54,16 +58,45 @@ Collectors (backend only, **service role key**):
 
 Direct `select` on `snmp_configs` is revoked for browser roles.
 
-## Roles (`profiles.role`)
-| Role | Read | Write devices | Ack alerts | Users |
-|------|------|---------------|------------|-------|
-| `admin` | all | yes | yes | yes |
-| `noc_operator` | all | yes | yes | no |
-| `network_engineer` | all | yes | yes | no |
-| `it_management` | all (+ snmp meta) | no | yes | no |
-| `read_only` | all (no snmp secrets) | no | no | no |
+## Topology links (`device_links`)
+Manual or discovered (CDP/LLDP/SNMP) edges between devices.
 
-Helpers: `current_app_role()`, `is_admin()`, `can_write_ops()`, `can_ack_alerts()`, `can_manage_users()`.
+| Column | Notes |
+|--------|--------|
+| `source_device_id` / `target_device_id` | FK → `devices`, no self-loops |
+| `source_interface` / `target_interface` | Optional port labels |
+| `link_type` | `ethernet` \| `fibra` \| `wan` \| `inalambrico` |
+| `discovered_via` | `manual` \| `cdp` \| `lldp` \| `snmp` |
+| `status` | `up` \| `down` \| `degraded` |
+| `org_id` | Tenant scope (migration 07) |
+
+RLS: SELECT same org; write requires `can_write_ops()` + same org.
+
+## Roles (`profiles.role`)
+| Role | Read (own org) | Write devices | Ack alerts | Users |
+|------|----------------|---------------|------------|-------|
+| `admin` | yes | yes | yes | yes |
+| `noc_operator` | yes | yes | yes | no |
+| `network_engineer` | yes | yes | yes | no |
+| `it_management` | yes (+ snmp meta) | no | yes | no |
+| `read_only` | yes (no snmp secrets) | no | no | no |
+
+Helpers: `current_app_role()`, `is_admin()`, `can_write_ops()`, `can_ack_alerts()`, `can_manage_users()`, `my_org_id()`, `same_org(uuid)`.
+
+**Inactive users** (`profiles.is_active = false`): helpers treat them as non-privileged (`read_only` / all `can_*` false).
+
+**Signup**: `handle_new_user` always sets `role = read_only` (client metadata cannot escalate). Admins assign roles via User Management / service role API.
+
+**Profile guard**: non-admins cannot change `role`, `is_active`, or `org_id` (BEFORE UPDATE trigger).
+
+## Multi-tenant (`organizations` / `org_id`)
+- Table `organizations` (seed: Default NOC).
+- `org_id` on `profiles`, `devices`, `collectors`, `alerts`, `events`, `reports`, `device_links`.
+- Existing rows backfilled to the default org.
+- INSERT triggers fill `org_id` from `my_org_id()` when null.
+- RLS: rows visible only in the caller’s org (admins still scoped by `same_org` / `is_admin` as defined in policies).
+
+To add a second tenant later: insert into `organizations`, create users with that `org_id`, and insert devices with the same `org_id`.
 
 ## Main RPCs
 ```ts
@@ -82,11 +115,11 @@ await supabase.rpc('get_snmp_config', { p_device_id: '...' })
 // await supabase.rpc('get_snmp_secrets_for_collector', { p_device_id: '...' })
 ```
 
-## Deploy (Claude)
+## Deploy
 1. Create Supabase project
-2. Run migrations 01→05 in SQL editor (or `supabase db push`)
-3. Set `app.snmp_encryption_key` (see above)
-4. Configure Auth Site URL + Redirect URLs (see Auth section)
+2. Run migrations **01→07** in SQL editor (or `supabase db push`)
+3. Set `app.snmp_encryption_key` (see SNMP section)
+4. Configure Auth Site URL + Redirect URLs
 5. Vercel env:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -94,7 +127,10 @@ await supabase.rpc('get_snmp_config', { p_device_id: '...' })
 6. First user: sign up, then set `profiles.role = 'admin'` in SQL for that user id
 
 ## Security notes
-- All tables have RLS enabled
+- All business tables have RLS enabled
+- Inactive accounts lose elevated RLS powers
+- Signup cannot self-assign admin via metadata
+- Non-admins cannot escalate `role` / `is_active` / `org_id`
+- Data scoped by `org_id` (multi-tenant foundation)
 - SNMP secrets encrypted at rest; UI never receives plaintext; collectors use service role RPC
-- RPCs use role helpers / security definer where appropriate
 - Service role key must **never** be exposed to the browser
