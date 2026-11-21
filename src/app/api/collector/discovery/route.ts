@@ -59,6 +59,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const scanId = url.searchParams.get('scanId');
+  const pending = url.searchParams.get('pending') === '1';
 
   if (scanId) {
     const { data: scan } = await admin.from('discovery_scans').select('*').eq('id', scanId).maybeSingle();
@@ -69,6 +70,18 @@ export async function GET(req: Request) {
       .eq('scan_id', scanId)
       .order('ip');
     return NextResponse.json({ scan, hosts: hosts ?? [] });
+  }
+
+  // Collector pulls queued wizard jobs
+  if (pending && auth.mode === 'collector') {
+    const { data, error } = await admin
+      .from('discovery_scans')
+      .select('*')
+      .eq('status', 'pending')
+      .order('started_at', { ascending: true })
+      .limit(5);
+    if (error) return fail(500, 'No se pudieron listar pending.');
+    return NextResponse.json({ scans: data ?? [] });
   }
 
   let q = admin.from('discovery_scans').select('*').order('started_at', { ascending: false }).limit(30);
@@ -93,6 +106,9 @@ export async function POST(req: Request) {
     orgId?: string;
     cidr?: string;
     name?: string;
+    description?: string | null;
+    gatewayIp?: string | null;
+    config?: Record<string, unknown>;
     collectorId?: string;
     hosts?: Array<{
       ip: string;
@@ -115,6 +131,52 @@ export async function POST(req: Request) {
   }
 
   const action = body.action ?? 'hosts';
+
+  // WUG wizard: queue job for LAN collector (status=pending)
+  if (action === 'queue') {
+    if (auth.mode !== 'user') return fail(403, 'Solo usuarios ops pueden encolar desde la UI.');
+    const cidr = (body.cidr ?? '').trim();
+    if (!cidr) return fail(400, 'cidr requerido.');
+    const orgId = body.orgId ?? auth.orgId;
+    if (!orgId) return fail(400, 'orgId requerido.');
+
+    const insert: Record<string, unknown> = {
+      org_id: orgId,
+      name: body.name ?? `Discovery ${cidr}`,
+      cidr,
+      status: 'pending',
+      created_by: auth.userId,
+      config: body.config ?? {},
+    };
+    if (body.description != null) insert.description = body.description;
+    if (body.gatewayIp) insert.gateway_ip = body.gatewayIp;
+
+    const { data, error } = await admin.from('discovery_scans').insert(insert).select('*').single();
+    if (error || !data) {
+      return fail(500, error?.message || 'No se pudo encolar el scan.');
+    }
+    return NextResponse.json({ scan: data }, { status: 201 });
+  }
+
+  // Collector claims a pending scan → running
+  if (action === 'claim') {
+    if (auth.mode !== 'collector') return fail(403, 'Solo colector.');
+    if (!body.scanId) return fail(400, 'scanId requerido.');
+    const { data, error } = await admin
+      .from('discovery_scans')
+      .update({
+        status: 'running',
+        collector_id: body.collectorId ?? 'lan-collector',
+        started_at: new Date().toISOString(),
+      })
+      .eq('id', body.scanId)
+      .eq('status', 'pending')
+      .select('*')
+      .maybeSingle();
+    if (error) return fail(500, 'No se pudo claim.');
+    if (!data) return fail(409, 'Scan no esta pending o no existe.');
+    return NextResponse.json({ scan: data });
+  }
 
   if (action === 'start') {
     const cidr = (body.cidr ?? '').trim();
