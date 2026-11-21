@@ -1,8 +1,9 @@
 'use client';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Radar, Loader2, RefreshCw, Server, CheckCircle2, XCircle, Clock, Download } from 'lucide-react';
+import { Radar, Loader2, RefreshCw, Server, CheckCircle2, XCircle, Clock, Download, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import DiscoveryWizard from './DiscoveryWizard';
 
 interface Scan {
   id: string;
@@ -40,6 +41,7 @@ async function authHeaders(): Promise<HeadersInit | null> {
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
+    pending: 'bg-primary/15 text-primary border-primary/30',
     running: 'bg-warning/15 text-warning border-warning/30',
     completed: 'bg-success/15 text-success border-success/30',
     failed: 'bg-danger/15 text-danger border-danger/30',
@@ -47,7 +49,7 @@ function StatusPill({ status }: { status: string }) {
   };
   return (
     <span className={`text-[10px] uppercase tracking-wide border rounded px-1.5 py-0.5 ${map[status] ?? map.cancelled}`}>
-      {status === 'running' ? (
+      {status === 'running' || status === 'pending' ? (
         <span className="inline-flex items-center gap-1">
           <Clock size={10} /> {status}
         </span>
@@ -66,6 +68,7 @@ export default function DiscoverContent() {
   const [hostsLoading, setHostsLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set());
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const loadScans = useCallback(async () => {
     const headers = await authHeaders();
@@ -149,32 +152,42 @@ export default function DiscoverContent() {
           <div>
             <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Descubre</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Red descubierta por el colector en tu LAN (estilo WhatsUp Gold / Zabbix proxy). El navegador no hace ping.
+              Discovery Scan tipo WhatsUp Gold: wizard → cola pending → colector LAN ejecuta ICMP/SNMP.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={loadScans}
-          disabled={loading}
-          className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 text-sm hover:bg-muted self-start"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={loadScans}
+            disabled={loading}
+            className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 text-sm hover:bg-muted"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Actualizar
+          </button>
+          <button
+            type="button"
+            onClick={() => setWizardOpen(true)}
+            className="flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:bg-primary/90"
+          >
+            <Plus size={16} />
+            Nuevo escaneo
+          </button>
+        </div>
       </div>
 
       <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground mb-1">Como escanear (colector en tu PC / servidor LAN)</p>
+        <p className="font-medium text-foreground mb-1">Flujo (como WUG Discovery Scan)</p>
         <ol className="list-decimal list-inside space-y-1 text-xs">
           <li>
-            En Vercel define <code className="font-mono text-foreground">COLLECTOR_API_KEY</code> y{' '}
-            <code className="font-mono text-foreground">SUPABASE_SERVICE_ROLE_KEY</code>.
+            <strong className="text-foreground">Nuevo escaneo</strong> — Start (CIDR/gateway) → Credentials → Options →
+            Review & Run (encola <code className="font-mono">pending</code>).
           </li>
           <li>
-            En el PC de la red ejecuta <code className="font-mono text-foreground">collector/discover.py</code>.
+            En la LAN: <code className="font-mono">python3 collector/discover.py</code> (o claim de jobs pending).
           </li>
-          <li>Los hosts aparecen aqui, seleccionalos y pulsa Anadir al inventario.</li>
+          <li>Aqui: hosts UP → Anadir al inventario.</li>
         </ol>
       </div>
 
@@ -191,7 +204,7 @@ export default function DiscoverContent() {
             <div className="p-8 text-center text-sm text-muted-foreground space-y-2">
               <Radar size={28} className="mx-auto opacity-50" />
               <p>Ningun escaneo aun</p>
-              <p className="text-xs">Ejecuta el colector contra tu CIDR (ej. 192.168.10.0/24).</p>
+              <p className="text-xs">Pulsa Nuevo escaneo (wizard) o ejecuta el colector.</p>
             </div>
           ) : (
             <ul className="divide-y divide-border max-h-[480px] overflow-y-auto">
@@ -250,7 +263,11 @@ export default function DiscoverContent() {
               <Loader2 className="animate-spin" size={18} />
             </div>
           ) : hosts.length === 0 ? (
-            <div className="p-12 text-center text-sm text-muted-foreground">Sin hosts en este scan</div>
+            <div className="p-12 text-center text-sm text-muted-foreground">
+              {scans.find((s) => s.id === selected)?.status === 'pending'
+                ? 'En cola (pending). Esperando al colector LAN…'
+                : 'Sin hosts en este scan'}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
@@ -310,6 +327,12 @@ export default function DiscoverContent() {
           )}
         </div>
       </div>
+
+      <DiscoveryWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onQueued={() => loadScans()}
+      />
     </div>
   );
 }
