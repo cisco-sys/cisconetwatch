@@ -19,7 +19,7 @@ interface Device {
   model: string | null;
   vendor: string;
   site: string | null;
-  status: 'up' | 'degraded' | 'down';
+  status: 'up' | 'degraded' | 'down' | 'unknown';
   protocol: string;
 }
 
@@ -44,6 +44,7 @@ const NODE_STROKE: Record<string, string> = {
   up: 'stroke-emerald-400',
   degraded: 'stroke-amber-400',
   down: 'stroke-red-400',
+  unknown: 'stroke-slate-400',
 };
 const LINK_STROKE: Record<string, string> = {
   up: 'stroke-emerald-500/60',
@@ -54,6 +55,7 @@ const STATUS_TEXT: Record<string, string> = {
   up: 'text-emerald-400',
   degraded: 'text-amber-400',
   down: 'text-red-400',
+  unknown: 'text-slate-400',
 };
 
 function hasName(d: Device): boolean {
@@ -238,7 +240,7 @@ export default function TopologyContent() {
                     }}
                   >
                     {isSelected && <circle r={34} className="fill-primary/10 stroke-primary" strokeWidth={1.5} />}
-                    <circle r={26} className={`fill-card ${NODE_STROKE[d.status] ?? NODE_STROKE.up}`} strokeWidth={3} />
+                    <circle r={26} className={`fill-card ${NODE_STROKE[d.status] ?? NODE_STROKE.unknown}`} strokeWidth={3} />
                     <text textAnchor="middle" dy="0.35em" className="fill-foreground text-[11px] font-semibold select-none">
                       {(VENDOR_LABEL[d.vendor] ?? d.vendor).slice(0, 2).toUpperCase()}
                     </text>
@@ -249,139 +251,135 @@ export default function TopologyContent() {
                     >
                       {shorten(label, 18)}
                     </text>
-                    <text textAnchor="middle" y={61} className="fill-muted-foreground text-[11px] font-mono select-none">
+                    <text textAnchor="middle" y={62} className="fill-muted-foreground text-[10px] font-mono select-none">
                       {d.ip}
                     </text>
                   </g>
                 );
               })}
-            </svg>
 
-            <div className="px-4 py-3 border-t border-border flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="h-0.5 w-5 bg-emerald-500" />
-                {T.topology.legendUp}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-0.5 w-5 bg-amber-500" />
-                {T.topology.legendDegraded}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-5 border-t-2 border-dashed border-red-500" />
-                {T.topology.legendDown}
-              </span>
-            </div>
+              <g transform={`translate(16 ${H - 28})`} className="text-[11px]">
+                <circle cx={0} cy={0} r={5} className="fill-transparent stroke-emerald-400" strokeWidth={2} />
+                <text x={12} y={4} className="fill-muted-foreground">{T.topology.legendUp}</text>
+                <circle cx={90} cy={0} r={5} className="fill-transparent stroke-amber-400" strokeWidth={2} />
+                <text x={102} y={4} className="fill-muted-foreground">{T.topology.legendDegraded}</text>
+                <circle cx={190} cy={0} r={5} className="fill-transparent stroke-red-400" strokeWidth={2} />
+                <text x={202} y={4} className="fill-muted-foreground">{T.topology.legendDown}</text>
+                <circle cx={270} cy={0} r={5} className="fill-transparent stroke-slate-400" strokeWidth={2} />
+                <text x={282} y={4} className="fill-muted-foreground">{T.topology.legendUnknown}</text>
+              </g>
+            </svg>
           </div>
 
-          <DetailPanel device={selected} devices={devices} links={selectedLinks} byId={byId} onChanged={load} />
+          {selected ? (
+            <DevicePanel
+              device={selected}
+              links={selectedLinks}
+              byId={byId}
+              allDevices={devices}
+              onChanged={load}
+              onClose={() => setSelectedId(null)}
+            />
+          ) : (
+            <div className="bg-card border border-border rounded-xl p-6 text-sm text-muted-foreground flex items-center">
+              {T.topology.selectPrompt}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-interface PanelProps {
-  device: Device | null;
-  devices: Device[];
+function DevicePanel({
+  device,
+  links,
+  byId,
+  allDevices,
+  onChanged,
+  onClose,
+}: {
+  device: Device;
   links: DeviceLink[];
   byId: Map<string, Device>;
+  allDevices: Device[];
   onChanged: () => void;
-}
-
-function DetailPanel({ device, devices, links, byId, onChanged }: PanelProps) {
-  const [editing, setEditing] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
+  onClose: () => void;
+}) {
+  const unnamed = !hasName(device);
+  const [editing, setEditing] = useState(unnamed);
+  const [nameDraft, setNameDraft] = useState(device.name);
   const [savingName, setSavingName] = useState(false);
-  const [target, setTarget] = useState('');
-  const [sourceIf, setSourceIf] = useState('');
-  const [targetIf, setTargetIf] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [localPort, setLocalPort] = useState('');
+  const [remotePort, setRemotePort] = useState('');
   const [linkType, setLinkType] = useState('ethernet');
   const [savingLink, setSavingLink] = useState(false);
 
   useEffect(() => {
-    setEditing(false);
-    setNameDraft(device && hasName(device) ? device.name : '');
-    setTarget('');
-    setSourceIf('');
-    setTargetIf('');
+    setEditing(!hasName(device));
+    setNameDraft(device.name);
+    setTargetId('');
+    setLocalPort('');
+    setRemotePort('');
     setLinkType('ethernet');
-  }, [device?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!device) {
-    return (
-      <aside className="bg-card border border-border rounded-xl p-6 text-sm text-muted-foreground">
-        {T.topology.selectPrompt}
-      </aside>
-    );
-  }
-
-  const unnamed = !hasName(device);
-  const others = devices.filter((d) => d.id !== device.id);
+  }, [device.id, device.name]);
 
   async function saveName() {
-    const supabase = getSupabaseBrowserClient();
     const name = nameDraft.trim();
-    if (!supabase || !device || name.length === 0) return;
+    if (!name) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
     setSavingName(true);
-    try {
-      const { data, error } = await supabase.from('devices').update({ name }).eq('id', device.id).select('id');
-      if (error || !data || data.length === 0) {
-        toast.error(error && error.code !== '42501' ? T.common.unexpected : T.common.noPermission);
-        return;
-      }
+    const { error } = await supabase.from('devices').update({ name }).eq('id', device.id);
+    setSavingName(false);
+    if (error) toast.error(T.common.unexpected);
+    else {
       toast.success(T.topology.renamed);
       setEditing(false);
       onChanged();
-    } catch {
-      toast.error(T.common.unexpected);
-    } finally {
-      setSavingName(false);
     }
   }
 
-  async function addLink(e: React.FormEvent) {
-    e.preventDefault();
-    const supabase = getSupabaseBrowserClient();
-    if (!supabase || !device || !target) return;
-    setSavingLink(true);
-    try {
-      const { error } = await supabase.from('device_links').insert({
-        source_device_id: device.id,
-        target_device_id: target,
-        source_interface: sourceIf.trim() || null,
-        target_interface: targetIf.trim() || null,
-        link_type: linkType,
-        discovered_via: 'manual',
-      });
-      if (error) {
-        if (error.code === '23505') toast.error(T.topology.linkExists);
-        else if (error.code === '42501') toast.error(T.common.noPermission);
-        else toast.error(T.common.unexpected);
-        return;
-      }
-      toast.success(T.topology.linkCreated);
-      setTarget('');
-      setSourceIf('');
-      setTargetIf('');
-      onChanged();
-    } catch {
-      toast.error(T.common.unexpected);
-    } finally {
-      setSavingLink(false);
-    }
-  }
-
-  async function removeLink(id: string) {
+  async function createLink() {
+    if (!targetId) return;
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
-    const { data, error } = await supabase.from('device_links').delete().eq('id', id).select('id');
-    if (error || !data || data.length === 0) {
-      toast.error(T.common.noPermission);
-      return;
+    setSavingLink(true);
+    const { error } = await supabase.from('device_links').insert({
+      source_device_id: device.id,
+      target_device_id: targetId,
+      source_interface: localPort.trim() || null,
+      target_interface: remotePort.trim() || null,
+      link_type: linkType,
+      discovered_via: 'manual',
+      status: 'up',
+    });
+    setSavingLink(false);
+    if (error) {
+      if (error.code === '23505') toast.error(T.topology.linkExists);
+      else toast.error(T.common.unexpected);
+    } else {
+      toast.success(T.topology.linkCreated);
+      setTargetId('');
+      setLocalPort('');
+      setRemotePort('');
+      onChanged();
     }
-    toast.success(T.topology.linkDeleted);
-    onChanged();
   }
+
+  async function deleteLink(id: string) {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const { error } = await supabase.from('device_links').delete().eq('id', id);
+    if (error) toast.error(T.common.unexpected);
+    else {
+      toast.success(T.topology.linkDeleted);
+      onChanged();
+    }
+  }
+
+  const others = allDevices.filter((d) => d.id !== device.id);
 
   return (
     <aside className="bg-card border border-border rounded-xl overflow-hidden">
@@ -462,7 +460,7 @@ function DetailPanel({ device, devices, links, byId, onChanged }: PanelProps) {
         <dt className="text-muted-foreground">{T.topology.site}</dt>
         <dd className="text-right text-foreground">{device.site || '—'}</dd>
         <dt className="text-muted-foreground">{T.topology.status}</dt>
-        <dd className={`text-right font-medium ${STATUS_TEXT[device.status] ?? ''}`}>
+        <dd className={`text-right font-medium ${STATUS_TEXT[device.status] ?? STATUS_TEXT.unknown}`}>
           {STATUS_LABEL[device.status] ?? device.status}
         </dd>
         <dt className="text-muted-foreground">{T.topology.protocol}</dt>
@@ -484,20 +482,17 @@ function DetailPanel({ device, devices, links, byId, onChanged }: PanelProps) {
               return (
                 <li key={l.id} className="rounded-lg border border-border px-3 py-2.5 flex items-start justify-between gap-2">
                   <div className="min-w-0 text-sm">
-                    <p className="font-medium text-foreground truncate">
-                      {other ? (hasName(other) ? other.name : 'Sin nombre') : '—'}
-                    </p>
-                    <p className="font-mono text-xs text-muted-foreground">{other?.ip}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {(localIf || '?') + ' ↔ ' + (remoteIf || '?')} · {LINK_TYPE_LABEL[l.link_type] ?? l.link_type} ·{' '}
+                    <p className="font-medium text-foreground truncate">{other?.name ?? otherId}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {localIf || '—'} → {remoteIf || '—'} · {LINK_TYPE_LABEL[l.link_type] ?? l.link_type} ·{' '}
                       {DISCOVERED_VIA_LABEL[l.discovered_via] ?? l.discovered_via}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeLink(l.id)}
-                    aria-label={`${T.common.delete}: ${other?.name ?? ''}`}
-                    className="rounded-lg p-1.5 text-muted-foreground hover:text-red-400 hover:bg-muted"
+                    onClick={() => deleteLink(l.id)}
+                    aria-label={T.common.delete}
+                    className="text-muted-foreground hover:text-danger p-1"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -508,72 +503,53 @@ function DetailPanel({ device, devices, links, byId, onChanged }: PanelProps) {
         )}
       </div>
 
-      <form onSubmit={addLink} className="px-5 py-4 space-y-3">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Link2 size={14} />
-          {T.topology.addConnection}
-        </h3>
+      <form
+        className="px-5 py-4 space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          createLink();
+        }}
+      >
+        <h3 className="text-sm font-semibold text-foreground">{T.topology.addConnection}</h3>
         {others.length === 0 ? (
           <p className="text-sm text-muted-foreground">{T.topology.noOtherDevices}</p>
         ) : (
           <>
             <div>
-              <label htmlFor="link-target" className="block text-xs text-muted-foreground mb-1">
-                {T.topology.connectTo}
-              </label>
-              <select id="link-target" value={target} onChange={(e) => setTarget(e.target.value)} className={inputClass}>
+              <label className="block text-xs text-muted-foreground mb-1">{T.topology.connectTo}</label>
+              <select className={inputClass} value={targetId} onChange={(e) => setTargetId(e.target.value)} required>
                 <option value="">{T.topology.chooseDevice}</option>
                 {others.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {hasName(d) ? d.name : 'Sin nombre'} ({d.ip})
+                    {hasName(d) ? d.name : d.ip} ({d.ip})
                   </option>
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label htmlFor="link-source-if" className="block text-xs text-muted-foreground mb-1">
-                  {T.topology.localPort}
-                </label>
-                <input
-                  id="link-source-if"
-                  value={sourceIf}
-                  onChange={(e) => setSourceIf(e.target.value)}
-                  placeholder="Gi1/0/1"
-                  maxLength={40}
-                  className={`${inputClass} font-mono`}
-                />
+                <label className="block text-xs text-muted-foreground mb-1">{T.topology.localPort}</label>
+                <input className={inputClass} value={localPort} onChange={(e) => setLocalPort(e.target.value)} placeholder="Gi1/0/1" />
               </div>
               <div>
-                <label htmlFor="link-target-if" className="block text-xs text-muted-foreground mb-1">
-                  {T.topology.remotePort}
-                </label>
-                <input
-                  id="link-target-if"
-                  value={targetIf}
-                  onChange={(e) => setTargetIf(e.target.value)}
-                  placeholder="Gi0/0"
-                  maxLength={40}
-                  className={`${inputClass} font-mono`}
-                />
+                <label className="block text-xs text-muted-foreground mb-1">{T.topology.remotePort}</label>
+                <input className={inputClass} value={remotePort} onChange={(e) => setRemotePort(e.target.value)} placeholder="Gi1/0/24" />
               </div>
             </div>
             <div>
-              <label htmlFor="link-type" className="block text-xs text-muted-foreground mb-1">
-                {T.topology.linkType}
-              </label>
-              <select id="link-type" value={linkType} onChange={(e) => setLinkType(e.target.value)} className={inputClass}>
-                {Object.entries(LINK_TYPE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+              <label className="block text-xs text-muted-foreground mb-1">{T.topology.linkType}</label>
+              <select className={inputClass} value={linkType} onChange={(e) => setLinkType(e.target.value)}>
+                {Object.entries(LINK_TYPE_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
                   </option>
                 ))}
               </select>
             </div>
             <button
               type="submit"
-              disabled={savingLink || !target}
-              className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-60"
+              disabled={savingLink || !targetId}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
               {savingLink ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
               {T.topology.connect}
