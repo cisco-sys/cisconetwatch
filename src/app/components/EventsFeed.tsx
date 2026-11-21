@@ -1,17 +1,17 @@
 'use client';
-import React, { useState } from 'react';
-import { AlertTriangle, Radio, XCircle, Info, Clock } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Radio, XCircle, Info, Clock, Loader2 } from 'lucide-react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { AlertSeverity } from '@/lib/supabase/database.types';
 
-const events = [
-  { id: 'evt-001', type: 'trap', severity: 'critical', device: 'SW-CORE-01', message: 'linkDown on GigabitEthernet0/1', time: '2m ago', protocol: 'SNMP' },
-  { id: 'evt-002', type: 'threshold', severity: 'major', device: 'RTR-EDGE-03', message: 'Interface Te1/0/1 utilization exceeded 90%', time: '4m ago', protocol: 'NETCONF' },
-  { id: 'evt-003', type: 'reachability', severity: 'critical', device: 'FW-DC-02', message: 'Device unreachable — 3 consecutive poll failures', time: '7m ago', protocol: 'SNMP' },
-  { id: 'evt-004', type: 'trap', severity: 'major', device: 'SW-CORE-01', message: 'coldStart trap received — device rebooted', time: '12m ago', protocol: 'SNMP' },
-  { id: 'evt-005', type: 'threshold', severity: 'minor', device: 'SW-ACC-07', message: 'Packet loss rate 0.34% on Gi0/24', time: '18m ago', protocol: 'SSH' },
-  { id: 'evt-006', type: 'info', severity: 'info', device: 'RTR-WAN-01', message: 'BGP neighbor 203.0.113.1 state changed to Established', time: '23m ago', protocol: 'NETCONF' },
-  { id: 'evt-007', type: 'trap', severity: 'major', device: 'SW-DIST-02', message: 'authenticationFailure trap from 192.168.1.44', time: '31m ago', protocol: 'SNMP' },
-  { id: 'evt-008', type: 'info', severity: 'info', device: 'SW-CORE-02', message: 'Spanning tree topology change detected on VLAN 10', time: '45m ago', protocol: 'SNMP' },
-];
+interface Evt {
+  id: string;
+  severity: AlertSeverity;
+  device_name: string | null;
+  message: string;
+  protocol: string | null;
+  created_at: string;
+}
 
 const severityConfig = {
   critical: { icon: <XCircle size={13} />, cls: 'text-danger', bg: 'bg-danger/10 border-danger/20' },
@@ -20,10 +20,39 @@ const severityConfig = {
   info: { icon: <Info size={13} />, cls: 'text-info', bg: 'bg-info/10 border-info/20' },
 };
 
+function ago(iso: string): string {
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  return `${Math.floor(sec / 3600)}h ago`;
+}
+
 export default function EventsFeed() {
+  const [events, setEvents] = useState<Evt[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'critical' | 'major'>('all');
 
-  const filtered = filter === 'all' ? events : events.filter((e) => e.severity === filter);
+  const load = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    const { data } = await supabase
+      .from('events')
+      .select('id,severity,device_name,message,protocol,created_at')
+      .order('created_at', { ascending: false })
+      .limit(40);
+    setEvents((data as Evt[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered =
+    filter === 'all' ? events : events.filter((e) => e.severity === filter);
 
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col h-full">
@@ -31,15 +60,15 @@ export default function EventsFeed() {
         <div className="flex items-center gap-2">
           <Radio size={14} className="text-primary" />
           <h2 className="text-sm font-semibold text-foreground">Live Events & Traps</h2>
-          <span className="w-2 h-2 rounded-full bg-danger live-pulse" />
         </div>
         <div className="flex gap-1">
           {(['all', 'critical', 'major'] as const).map((f) => (
             <button
-              key={`evtfilter-${f}`}
+              key={f}
+              type="button"
               onClick={() => setFilter(f)}
-              className={`px-2 py-1 rounded text-xs transition-colors ${
-                filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+              className={`px-2 py-1 rounded text-xs ${
+                filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
               }`}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -48,49 +77,48 @@ export default function EventsFeed() {
         </div>
       </div>
 
-      <div className="space-y-2 overflow-y-auto scrollbar-thin flex-1" style={{ maxHeight: 420 }}>
-        {filtered.map((evt) => {
-          const sc = severityConfig[evt.severity as keyof typeof severityConfig];
-          return (
-            <div
-              key={evt.id}
-              className={`rounded-lg border p-3 ${sc.bg} transition-all duration-150 hover:shadow-md`}
-            >
-              <div className="flex items-start gap-2">
-                <span className={`mt-0.5 flex-shrink-0 ${sc.cls}`}>{sc.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono font-semibold text-foreground truncate">
-                      {evt.device}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-mono flex-shrink-0 flex items-center gap-1">
-                      <Clock size={10} />
-                      {evt.time}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
-                    {evt.message}
-                  </p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <span className={`text-xs font-mono uppercase tracking-wide ${sc.cls}`}>
-                      {evt.severity}
-                    </span>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs font-mono text-muted-foreground">{evt.protocol}</span>
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center gap-2 text-sm text-muted-foreground py-10">
+          <Loader2 size={16} className="animate-spin" /> Loading events…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-10 space-y-2">
+          <Radio size={22} className="text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">No events yet</p>
+          <p className="text-xs text-muted-foreground max-w-xs">
+            Traps and reachability events appear when a collector ingests them into the events table.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2 overflow-y-auto flex-1" style={{ maxHeight: 420 }}>
+          {filtered.map((evt) => {
+            const sc = severityConfig[evt.severity] ?? severityConfig.info;
+            return (
+              <div key={evt.id} className={`rounded-lg border p-3 ${sc.bg}`}>
+                <div className="flex items-start gap-2">
+                  <span className={`mt-0.5 ${sc.cls}`}>{sc.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-mono font-semibold truncate">
+                        {evt.device_name || '—'}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+                        <Clock size={10} />
+                        {ago(evt.created_at)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{evt.message}</p>
+                    <div className="mt-1.5 flex gap-2 text-xs font-mono">
+                      <span className={sc.cls}>{evt.severity}</span>
+                      {evt.protocol && <span className="text-muted-foreground">{evt.protocol}</span>}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Showing last 60 min</span>
-        <button className="text-xs text-primary hover:text-primary/80 transition-colors">
-          View all events →
-        </button>
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

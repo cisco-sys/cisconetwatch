@@ -1,166 +1,187 @@
-import React from 'react';
-import {
-  Activity,
-  Wifi,
-  AlertTriangle,
-  Radio,
-  TrendingUp,
-  Server,
-} from 'lucide-react';
+'use client';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Activity, AlertTriangle, Radio, Server, Loader2 } from 'lucide-react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const metrics = [
-  {
-    id: 'metric-device-reachability',
-    label: 'Device Reachability',
-    value: '44/47',
-    sub: '3 unreachable',
-    trend: '-2 from 1h ago',
-    trendDown: true,
-    icon: <Server size={18} />,
-    variant: 'warning',
-    hero: true,
-  },
-  {
-    id: 'metric-interfaces-up',
-    label: 'Interfaces Up',
-    value: '312',
-    sub: '8 down · 4 admin-down',
-    trend: '96.3% up rate',
-    trendDown: false,
-    icon: <Activity size={18} />,
-    variant: 'success',
-    hero: false,
-  },
-  {
-    id: 'metric-bandwidth-util',
-    label: 'Avg Bandwidth Util',
-    value: '67.4%',
-    sub: '3 ports >90% saturation',
-    trend: '+4.1% vs 1h ago',
-    trendDown: true,
-    icon: <TrendingUp size={18} />,
-    variant: 'warning',
-    hero: false,
-  },
-  {
-    id: 'metric-packet-loss',
-    label: 'Packet Loss Rate',
-    value: '0.23%',
-    sub: 'Threshold: 0.10%',
-    trend: 'Above threshold',
-    trendDown: true,
-    icon: <Wifi size={18} />,
-    variant: 'danger',
-    hero: false,
-  },
-  {
-    id: 'metric-snmp-traps',
-    label: 'SNMP Traps (1h)',
-    value: '1,847',
-    sub: '↑ 340% vs baseline',
-    trend: 'Trap storm on SW-CORE-01',
-    trendDown: true,
-    icon: <Radio size={18} />,
-    variant: 'danger',
-    hero: false,
-  },
-  {
-    id: 'metric-active-incidents',
-    label: 'Active Incidents',
-    value: '6',
-    sub: '2 critical · 3 major · 1 minor',
-    trend: '+2 since last shift',
-    trendDown: true,
-    icon: <AlertTriangle size={18} />,
-    variant: 'accent',
-    hero: false,
-  },
-];
+interface Metrics {
+  devices_total: number;
+  devices_up: number;
+  devices_degraded: number;
+  devices_down: number;
+  interfaces_up: number;
+  interfaces_total: number;
+  avg_utilization: number;
+  alerts_unacked: number;
+  alerts_critical: number;
+  collectors_active: number;
+  collectors_total: number;
+  events_1h: number;
+}
 
-const variantStyles: Record<string, string> = {
-  success: 'border-success/20 bg-success/5',
-  warning: 'border-warning/20 bg-warning/5',
-  danger: 'border-danger/20 bg-danger/5',
-  accent: 'border-accent/20 bg-accent/5',
-  primary: 'border-primary/20 bg-primary/5',
-};
-
-const iconStyles: Record<string, string> = {
-  success: 'text-success bg-success/10',
-  warning: 'text-warning bg-warning/10',
-  danger: 'text-danger bg-danger/10',
-  accent: 'text-accent bg-accent/10',
-  primary: 'text-primary bg-primary/10',
-};
-
-const valueStyles: Record<string, string> = {
-  success: 'text-success',
-  warning: 'text-warning',
-  danger: 'text-danger',
-  accent: 'text-accent',
-  primary: 'text-primary',
+const empty: Metrics = {
+  devices_total: 0,
+  devices_up: 0,
+  devices_degraded: 0,
+  devices_down: 0,
+  interfaces_up: 0,
+  interfaces_total: 0,
+  avg_utilization: 0,
+  alerts_unacked: 0,
+  alerts_critical: 0,
+  collectors_active: 0,
+  collectors_total: 0,
+  events_1h: 0,
 };
 
 export default function MetricsBentoGrid() {
-  const hero = metrics[0];
-  const rest = metrics.slice(1);
+  const [m, setM] = useState<Metrics>(empty);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    const { data } = await supabase.rpc('get_dashboard_metrics');
+    if (data && typeof data === 'object') setM({ ...empty, ...(data as Metrics) });
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 size={16} className="animate-spin" /> Loading metrics…
+      </div>
+    );
+  }
+
+  const reach =
+    m.devices_total > 0
+      ? `${m.devices_up}/${m.devices_total}`
+      : '0/0';
+  const unreach = m.devices_down + m.devices_degraded;
+  const upRate =
+    m.interfaces_total > 0
+      ? `${((m.interfaces_up / m.interfaces_total) * 100).toFixed(1)}% up`
+      : 'No interfaces';
+
+  const cards = [
+    {
+      id: 'reach',
+      label: 'Device Reachability',
+      value: reach,
+      sub:
+        m.devices_total === 0
+          ? 'Inventory empty — no collector verification yet'
+          : `${unreach} not fully up (down/degraded/unknown)`,
+      icon: <Server size={18} />,
+      variant: unreach > 0 ? 'warning' : m.devices_total === 0 ? 'primary' : 'success',
+      hero: true,
+    },
+    {
+      id: 'ifaces',
+      label: 'Interfaces Up',
+      value: String(m.interfaces_up),
+      sub: `${m.interfaces_total} total · ${upRate}`,
+      icon: <Activity size={18} />,
+      variant: 'success',
+      hero: false,
+    },
+    {
+      id: 'util',
+      label: 'Avg Utilization',
+      value: `${Number(m.avg_utilization ?? 0).toFixed(1)}%`,
+      sub: m.devices_total === 0 ? 'No polled devices' : 'From last collector metrics',
+      icon: <Activity size={18} />,
+      variant: Number(m.avg_utilization) > 80 ? 'warning' : 'primary',
+      hero: false,
+    },
+    {
+      id: 'events',
+      label: 'Events (1h)',
+      value: String(m.events_1h),
+      sub: 'From events table',
+      icon: <Radio size={18} />,
+      variant: m.events_1h > 50 ? 'danger' : 'primary',
+      hero: false,
+    },
+    {
+      id: 'alerts',
+      label: 'Unacked Alerts',
+      value: String(m.alerts_unacked),
+      sub: `${m.alerts_critical} critical`,
+      icon: <AlertTriangle size={18} />,
+      variant: m.alerts_critical > 0 ? 'danger' : m.alerts_unacked > 0 ? 'warning' : 'success',
+      hero: false,
+    },
+    {
+      id: 'cols',
+      label: 'Collectors',
+      value: `${m.collectors_active}/${m.collectors_total}`,
+      sub: m.collectors_total === 0 ? 'None registered in database' : 'Active / total',
+      icon: <Radio size={18} />,
+      variant: m.collectors_total === 0 ? 'warning' : 'success',
+      hero: false,
+    },
+  ];
+
+  const variantStyles: Record<string, string> = {
+    success: 'border-success/20 bg-success/5',
+    warning: 'border-warning/20 bg-warning/5',
+    danger: 'border-danger/20 bg-danger/5',
+    accent: 'border-accent/20 bg-accent/5',
+    primary: 'border-primary/20 bg-primary/5',
+  };
+  const iconStyles: Record<string, string> = {
+    success: 'text-success bg-success/10',
+    warning: 'text-warning bg-warning/10',
+    danger: 'text-danger bg-danger/10',
+    accent: 'text-accent bg-accent/10',
+    primary: 'text-primary bg-primary/10',
+  };
+  const valueStyles: Record<string, string> = {
+    success: 'text-success',
+    warning: 'text-warning',
+    danger: 'text-danger',
+    accent: 'text-accent',
+    primary: 'text-primary',
+  };
+
+  const hero = cards[0];
+  const rest = cards.slice(1);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-      <div
-        className={`col-span-2 rounded-xl border p-4 sm:p-5 ${variantStyles[hero.variant]} transition-all duration-150 hover:shadow-lg`}
-      >
-        <div className="flex items-start justify-between mb-3 sm:mb-4">
+      <div className={`col-span-2 rounded-xl border p-4 sm:p-5 ${variantStyles[hero.variant]}`}>
+        <div className="flex items-start justify-between mb-3">
           <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
-              {hero.label}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 font-mono">{hero.sub}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">{hero.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{hero.sub}</p>
           </div>
-          <span className={`p-2 rounded-lg ${iconStyles[hero.variant]}`}>
-            {hero.icon}
-          </span>
+          <span className={`p-2 rounded-lg ${iconStyles[hero.variant]}`}>{hero.icon}</span>
         </div>
         <p className={`text-4xl sm:text-5xl font-bold tabular-nums font-mono ${valueStyles[hero.variant]}`}>
           {hero.value}
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <AlertTriangle size={12} className="text-warning" />
-          <span className="text-xs text-warning">{hero.trend}</span>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {['SW-CORE-01', 'RTR-EDGE-03', 'FW-DC-02'].map((d) => (
-            <span key={`unreachable-${d}`} className="text-xs font-mono bg-danger/10 text-danger border border-danger/20 rounded px-2 py-0.5">
-              {d}
-            </span>
-          ))}
-        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Source: Supabase <code className="font-mono">get_dashboard_metrics</code> — not demo values.
+        </p>
       </div>
-
-      {rest.map((m) => (
-        <div
-          key={m.id}
-          className={`rounded-xl border p-3 sm:p-5 ${variantStyles[m.variant]} transition-all duration-150 hover:shadow-lg`}
-        >
-          <div className="flex items-start justify-between mb-2 sm:mb-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest leading-tight">
-              {m.label}
-            </p>
-            <span className={`p-1.5 rounded-lg ${iconStyles[m.variant]} flex-shrink-0`}>
-              {m.icon}
-            </span>
+      {rest.map((c) => (
+        <div key={c.id} className={`rounded-xl border p-3 sm:p-5 ${variantStyles[c.variant]}`}>
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">{c.label}</p>
+            <span className={`p-1.5 rounded-lg ${iconStyles[c.variant]}`}>{c.icon}</span>
           </div>
-          <p className={`text-2xl sm:text-3xl font-bold tabular-nums font-mono ${valueStyles[m.variant]}`}>
-            {m.value}
+          <p className={`text-2xl sm:text-3xl font-bold tabular-nums font-mono ${valueStyles[c.variant]}`}>
+            {c.value}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">{m.sub}</p>
-          <div className="mt-2 flex items-center gap-1">
-            {m.trendDown ? (
-              <span className="text-xs text-danger">{m.trend}</span>
-            ) : (
-              <span className="text-xs text-success">{m.trend}</span>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground mt-1">{c.sub}</p>
         </div>
       ))}
     </div>

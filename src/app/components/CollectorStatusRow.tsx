@@ -1,115 +1,115 @@
-import React from 'react';
+'use client';
+import React, { useCallback, useEffect, useState } from 'react';
 import ProtocolBadge from '@/components/ui/ProtocolBadge';
-import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Loader2, Radio } from 'lucide-react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
+import type { ProtocolType } from '@/lib/supabase/database.types';
 
-const collectors = [
-  {
-    id: 'col-snmp-primary',
-    name: 'SNMP Collector Primary',
-    protocol: 'SNMP' as const,
-    host: '10.0.1.50',
-    polled: 47,
-    success: 44,
-    interval: '60s',
-    lastPoll: '12s ago',
-    status: 'active',
-  },
-  {
-    id: 'col-netconf-01',
-    name: 'NETCONF/YANG Agent',
-    protocol: 'NETCONF' as const,
-    host: '10.0.1.51',
-    polled: 18,
-    success: 18,
-    interval: '30s',
-    lastPoll: '8s ago',
-    status: 'active',
-  },
-  {
-    id: 'col-ssh-scraper',
-    name: 'SSH/CLI Scraper',
-    protocol: 'SSH' as const,
-    host: '10.0.1.52',
-    polled: 12,
-    success: 11,
-    interval: '120s',
-    lastPoll: '45s ago',
-    status: 'degraded',
-  },
-  {
-    id: 'col-restconf-01',
-    name: 'RESTCONF Poller',
-    protocol: 'RESTCONF' as const,
-    host: '10.0.1.53',
-    polled: 8,
-    success: 8,
-    interval: '30s',
-    lastPoll: '5s ago',
-    status: 'active',
-  },
-  {
-    id: 'col-telemetry-01',
-    name: 'gRPC Telemetry Stream',
-    protocol: 'TELEMETRY' as const,
-    host: '10.0.1.54',
-    polled: 6,
-    success: 0,
-    interval: 'stream',
-    lastPoll: '4m ago',
-    status: 'down',
-  },
-];
+interface Row {
+  id: string;
+  name: string;
+  protocol: ProtocolType;
+  host: string;
+  status: 'active' | 'degraded' | 'down';
+  devices_count: number | null;
+  success_rate: number | null;
+  last_heartbeat_at: string | null;
+}
+
+function ago(iso: string | null): string {
+  if (!iso) return 'Never';
+  const sec = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  return `${Math.floor(sec / 3600)}h ago`;
+}
 
 export default function CollectorStatusRow() {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    const { data } = await supabase.rpc('get_collector_health');
+    setRows((Array.isArray(data) ? data : []) as Row[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">Collection Protocol Status</h2>
-        <span className="text-xs text-muted-foreground font-mono">5 collectors active</span>
+        <span className="text-xs text-muted-foreground font-mono">
+          {loading ? '…' : `${rows.length} in database`}
+        </span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {collectors.map((c) => {
-          const successRate = c.polled > 0 ? Math.round((c.success / c.polled) * 100) : 0;
-          const statusIcon =
-            c.status === 'active' ? <CheckCircle2 size={14} className="text-success" /> :
-            c.status === 'degraded' ? <AlertCircle size={14} className="text-warning" /> :
-            <XCircle size={14} className="text-danger" />;
-          return (
-            <div
-              key={c.id}
-              className={`rounded-lg border p-3 ${
-                c.status === 'active' ? 'border-success/20 bg-success/5' :
-                c.status === 'degraded' ? 'border-warning/20 bg-warning/5' : 'border-danger/20 bg-danger/5'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <ProtocolBadge protocol={c.protocol} active={c.status !== 'down'} />
-                {statusIcon}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
+          <Loader2 size={16} className="animate-spin" /> Loading collectors…
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="py-8 text-center space-y-2">
+          <Radio size={22} className="mx-auto text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">No collectors registered</p>
+          <p className="text-xs text-muted-foreground max-w-lg mx-auto">
+            Like WhatsUp Gold agents, collectors must run on your LAN and write heartbeats to Supabase.
+            This panel will not show simulated SNMP/NETCONF agents.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {rows.map((c) => {
+            const rate = c.success_rate ?? 0;
+            const status = c.status ?? 'down';
+            const statusIcon =
+              status === 'active' ? (
+                <CheckCircle2 size={14} className="text-success" />
+              ) : status === 'degraded' ? (
+                <AlertCircle size={14} className="text-warning" />
+              ) : (
+                <XCircle size={14} className="text-danger" />
+              );
+            return (
+              <div
+                key={c.id}
+                className={`rounded-lg border p-3 ${
+                  status === 'active'
+                    ? 'border-success/20 bg-success/5'
+                    : status === 'degraded'
+                      ? 'border-warning/20 bg-warning/5'
+                      : 'border-danger/20 bg-danger/5'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <ProtocolBadge protocol={c.protocol} active={status !== 'down'} />
+                  {statusIcon}
+                </div>
+                <p className="text-xs font-medium text-foreground truncate">{c.name}</p>
+                <p className="text-xs font-mono text-muted-foreground mt-0.5">{String(c.host)}</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span
+                    className={`text-sm font-bold font-mono tabular-nums ${
+                      rate >= 95 ? 'text-success' : rate >= 80 ? 'text-warning' : 'text-danger'
+                    }`}
+                  >
+                    {rate}%
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">{ago(c.last_heartbeat_at)}</span>
+                </div>
               </div>
-              <p className="text-xs font-medium text-foreground truncate">{c.name}</p>
-              <p className="text-xs font-mono text-muted-foreground mt-0.5">{c.host}</p>
-              <div className="mt-2 flex items-center justify-between">
-                <span className={`text-sm font-bold font-mono tabular-nums ${
-                  successRate >= 95 ? 'text-success' :
-                  successRate >= 80 ? 'text-warning' : 'text-danger'
-                }`}>
-                  {successRate}%
-                </span>
-                <span className="text-xs text-muted-foreground font-mono">{c.lastPoll}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    successRate >= 95 ? 'bg-success' :
-                    successRate >= 80 ? 'bg-warning' : 'bg-danger'
-                  }`}
-                  style={{ width: `${successRate}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
