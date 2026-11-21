@@ -22,6 +22,7 @@ export const STATUS_LABEL: Record<string, string> = {
   up: 'Activo',
   degraded: 'Degradado',
   down: 'Caído',
+  unknown: 'Sin verificar',
 };
 
 export const PROTOCOL_LABEL: Record<string, string> = {
@@ -73,7 +74,8 @@ export const T = {
     title: 'Topología de red',
     subtitle: 'Equipos registrados y las conexiones entre ellos',
     emptyTitle: 'Aún no hay equipos en la topología',
-    emptyBody: 'Agrega dispositivos en Configuración de dispositivos. Las conexiones aparecerán aquí cuando las registres o las descubra el colector.',
+    emptyBody:
+      'Agrega dispositivos en Configuración de dispositivos. Las conexiones aparecerán aquí cuando las registres o las descubra el colector.',
     selectPrompt: 'Selecciona un equipo del diagrama para ver sus datos y conexiones.',
     unnamedTitle: 'Este equipo no tiene nombre',
     unnamedBody: 'Ahora se identifica por su IP. Asígnale un nombre para reconocerlo fácilmente.',
@@ -102,6 +104,7 @@ export const T = {
     legendUp: 'Activo',
     legendDegraded: 'Degradado',
     legendDown: 'Caído',
+    legendUnknown: 'Sin verificar',
     devicesCount: (n: number) => `${n} ${n === 1 ? 'equipo' : 'equipos'}`,
     linksCount: (n: number) => `${n} ${n === 1 ? 'conexión' : 'conexiones'}`,
     loadError: 'No se pudo cargar la topología. Actualiza e inténtalo de nuevo.',
@@ -124,7 +127,8 @@ export const T = {
     submit: 'Crear usuario',
     creating: 'Creando…',
     createdTitle: 'Usuario creado',
-    createdBody: 'Entrega esta contraseña al usuario por un canal seguro. No se volverá a mostrar y debe cambiarla al entrar.',
+    createdBody:
+      'Entrega esta contraseña al usuario por un canal seguro. No se volverá a mostrar y debe cambiarla al entrar.',
     close: 'Cerrar',
     exists: 'Ya existe un usuario con ese correo.',
     forbidden: 'Solo un administrador puede crear usuarios.',
