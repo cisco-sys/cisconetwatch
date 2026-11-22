@@ -201,7 +201,7 @@ export default function DiscoveryWizard({ open, onClose, onQueued }: Props) {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Limit: el colector rechaza rangos > 4096 hosts. El scan real lo ejecuta el PC en la LAN.
+                  Limit: el colector rechaza rangos de mas de 4096 hosts. El scan real lo ejecuta el PC en la LAN.
                 </p>
               </>
             )}
