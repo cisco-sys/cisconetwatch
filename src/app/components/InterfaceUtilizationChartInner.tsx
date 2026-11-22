@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -10,16 +10,10 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { Loader2 } from 'lucide-react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const data = [
-  { iface: 'Gi0/1', util: 94, device: 'SW-CORE-01' },
-  { iface: 'Te1/0/1', util: 88, device: 'RTR-EDGE-03' },
-  { iface: 'Gi0/24', util: 82, device: 'SW-ACC-07' },
-  { iface: 'Gi1/0/2', util: 76, device: 'SW-DIST-02' },
-  { iface: 'Te0/0/0', util: 71, device: 'RTR-WAN-01' },
-  { iface: 'Gi0/8', util: 65, device: 'SW-CORE-02' },
-  { iface: 'Gi2/0/1', util: 58, device: 'SW-ACC-12' },
-];
+type Row = { iface: string; util: number; device: string };
 
 const getColor = (util: number) => {
   if (util >= 90) return 'var(--danger)';
@@ -41,39 +35,81 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function InterfaceUtilizationChartInner() {
+  const [data, setData] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    const { data: rows } = await supabase
+      .from('interfaces')
+      .select('name,utilization_pct,device_id,devices(name)')
+      .not('utilization_pct', 'is', null)
+      .order('utilization_pct', { ascending: false })
+      .limit(10);
+
+    const mapped: Row[] = (rows ?? []).map((r: any) => ({
+      iface: r.name,
+      util: Number(r.utilization_pct) || 0,
+      device: r.devices?.name ?? '—',
+    }));
+    setData(mapped);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   return (
     <div className="bg-card border border-border rounded-xl p-5 h-full">
       <div className="mb-4">
         <h2 className="text-sm font-semibold text-foreground">Top Saturated Interfaces</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">Current utilization %</p>
+        <p className="text-xs text-muted-foreground mt-0.5">From interfaces table · utilization_pct</p>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-          <XAxis
-            type="number"
-            domain={[0, 100]}
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `${v}%`}
-          />
-          <YAxis
-            type="category"
-            dataKey="iface"
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            axisLine={false}
-            tickLine={false}
-            width={55}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="util" radius={[0, 4, 4, 0]}>
-            {data.map((entry, index) => (
-              <Cell key={`cell-util-${index}`} fill={getColor(entry.util)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      {loading ? (
+        <div className="h-[240px] flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      ) : data.length === 0 ? (
+        <div className="h-[240px] flex flex-col items-center justify-center text-center px-4 space-y-2 border border-dashed border-border rounded-lg">
+          <p className="text-sm font-medium text-foreground">No utilization data</p>
+          <p className="text-xs text-muted-foreground max-w-xs">
+            Collectors must populate interface utilization. This chart does not show invented ports.
+          </p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
+            <XAxis
+              type="number"
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `${v}%`}
+            />
+            <YAxis
+              type="category"
+              dataKey="iface"
+              tick={{ fontSize: 10, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              axisLine={false}
+              tickLine={false}
+              width={55}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="util" radius={[0, 4, 4, 0]}>
+              {data.map((entry, index) => (
+                <Cell key={`cell-util-${index}`} fill={getColor(entry.util)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

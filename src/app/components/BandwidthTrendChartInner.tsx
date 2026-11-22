@@ -1,22 +1,10 @@
 'use client';
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Loader2 } from 'lucide-react';
+import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
-const data = [
-  { time: '00:00', inbound: 2.1, outbound: 1.8 },
-  { time: '02:00', inbound: 1.4, outbound: 1.2 },
-  { time: '04:00', inbound: 0.9, outbound: 0.7 },
-  { time: '06:00', inbound: 1.8, outbound: 1.5 },
-  { time: '08:00', inbound: 4.2, outbound: 3.9 },
-  { time: '10:00', inbound: 6.8, outbound: 6.1 },
-  { time: '12:00', inbound: 7.4, outbound: 6.8 },
-  { time: '14:00', inbound: 8.1, outbound: 7.5 },
-  { time: '16:00', inbound: 9.3, outbound: 8.7 },
-  { time: '18:00', inbound: 7.9, outbound: 7.2 },
-  { time: '20:00', inbound: 5.6, outbound: 5.1 },
-  { time: '22:00', inbound: 3.2, outbound: 2.9 },
-  { time: 'Now', inbound: 4.8, outbound: 4.3 },
-];
+type Point = { time: string; inbound: number; outbound: number };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -34,13 +22,37 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+/**
+ * Aggregate bandwidth chart.
+ * There is no time-series table yet for interface counters history.
+ * We show an honest empty state — never invent Gbps values.
+ */
 export default function BandwidthTrendChartInner() {
+  const [data, setData] = useState<Point[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+    // Future: query metrics_timeseries / interface counter samples.
+    // Until collectors write history, keep empty (no mock series).
+    setData([]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
   return (
     <div className="bg-card border border-border rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Aggregate Bandwidth — 24h</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">All interfaces combined · Gbps</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Requires collector counter history (not simulated)</p>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
           <span className="flex items-center gap-1.5">
@@ -53,36 +65,50 @@ export default function BandwidthTrendChartInner() {
           </span>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
-        <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-          <defs>
-            <linearGradient id="gradIn" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-          <XAxis
-            dataKey="time"
-            tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `${v}G`}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey="inbound" stroke="var(--primary)" strokeWidth={2} fill="url(#gradIn)" />
-          <Area type="monotone" dataKey="outbound" stroke="var(--accent)" strokeWidth={2} fill="url(#gradOut)" />
-        </AreaChart>
-      </ResponsiveContainer>
+      {loading ? (
+        <div className="h-[240px] flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      ) : data.length === 0 ? (
+        <div className="h-[240px] flex flex-col items-center justify-center text-center px-4 space-y-2 border border-dashed border-border rounded-lg">
+          <p className="text-sm font-medium text-foreground">No bandwidth history yet</p>
+          <p className="text-xs text-muted-foreground max-w-sm">
+            When the LAN collector stores interface counter samples over time, this chart will plot real inbound/outbound
+            Gbps. Demo curves are not shown in production mode.
+          </p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={240}>
+          <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gradIn" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--muted-foreground)', fontFamily: 'var(--font-mono)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `${v}G`}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="inbound" stroke="var(--primary)" strokeWidth={2} fill="url(#gradIn)" />
+            <Area type="monotone" dataKey="outbound" stroke="var(--accent)" strokeWidth={2} fill="url(#gradOut)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }
