@@ -19,6 +19,7 @@ import {
   Workflow,
   Building2,
   Radar,
+  ScanSearch,
 } from 'lucide-react';
 
 interface NavItem {
@@ -32,6 +33,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: <LayoutDashboard size={18} />, group: 'Operations' },
   { label: 'Descubre', href: '/discover', icon: <Radar size={18} />, group: 'Operations' },
+  { label: 'IP Scan', href: '/ip-scan', icon: <ScanSearch size={18} />, group: 'Operations' },
   { label: 'Device Detail', href: '/interface-device-detail', icon: <Network size={18} />, group: 'Operations' },
   { label: 'Live Traffic', href: '/interface-device-detail', icon: <Activity size={18} />, group: 'Operations' },
   { label: 'Topology', href: '/topology', icon: <Workflow size={18} />, group: 'Operations' },
