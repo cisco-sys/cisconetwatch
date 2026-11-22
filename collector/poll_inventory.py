@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ICMP poll of inventory + collector heartbeat (Zabbix proxy / WUG monitor)."""
+"""ICMP poll of inventory + collector heartbeat (Windows/Linux/Mac)."""
 
 from __future__ import annotations
 
@@ -40,7 +40,12 @@ def ping_one(ip: str) -> dict[str, Any]:
         cmd = ["ping", "-c", "1", "-W", str(max(1, int(TIMEOUT))), ip]
     t0 = time.perf_counter()
     try:
-        ok = subprocess.run(cmd, capture_output=True, timeout=TIMEOUT + 2).returncode == 0
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 2)
+        out = (proc.stdout or "") + (proc.stderr or "")
+        if system == "windows":
+            ok = "TTL=" in out.upper() or "ttl=" in out
+        else:
+            ok = proc.returncode == 0
     except Exception:
         ok = False
     rtt = round((time.perf_counter() - t0) * 1000, 2) if ok else None
@@ -50,6 +55,7 @@ def ping_one(ip: str) -> dict[str, Any]:
 def main() -> int:
     if not API_URL or not KEY or not ORG_ID:
         print("Set CNW_API_URL, CNW_COLLECTOR_KEY, CNW_ORG_ID", file=sys.stderr)
+        print('PowerShell: $env:CNW_API_URL="https://..."; $env:CNW_COLLECTOR_KEY="..."; $env:CNW_ORG_ID="..."', file=sys.stderr)
         return 1
 
     results: list[dict[str, Any]] = []
@@ -81,7 +87,7 @@ def main() -> int:
             "host": HOST,
             "protocol": "ICMP",
             "orgId": ORG_ID,
-            "version": "cnw-collector/1.0",
+            "version": "cnw-collector/1.1",
             "devicesCount": len(results),
             "successRate": rate,
             "status": "active" if not results or up > 0 else "degraded",
