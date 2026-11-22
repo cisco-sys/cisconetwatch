@@ -223,7 +223,9 @@ export default function DeviceDetailContent() {
           </div>
         )}
         {activeTab === 'tab-ports' && <PortConfigPanel />}
-        {activeTab === 'tab-snmp-config' && <SNMPConfigPanel />}
+        {activeTab === 'tab-snmp-config' && (
+          <SNMPConfigPanel deviceId={device.id} deviceName={device.name} />
+        )}
         {activeTab === 'tab-snmp' && <SNMPOidPanel />}
         {activeTab === 'tab-events' && <DeviceEventsFeed />}
       </div>
