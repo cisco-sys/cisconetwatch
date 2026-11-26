@@ -15,7 +15,7 @@ function fail(status: number, message: string) {
 }
 
 export async function POST(req: Request) {
-  if (!assertCollectorKey(req)) return fail(401, 'X-Collector-Key invalida.';
+  if (!assertCollectorKey(req)) return fail(401, 'X-Collector-Key invalida.');
 
   const admin = adminClient();
   if (!admin) return fail(503, 'Service role no configurado.');
