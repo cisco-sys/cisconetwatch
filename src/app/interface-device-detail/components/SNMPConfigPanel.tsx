@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Badge from '@/components/ui/Badge';
-import { Save, Loader2, Wifi, Shield, Lock } from 'lucide-react';
+import { Save, Loader2, Wifi, Shield, Lock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -46,6 +46,7 @@ export default function SNMPConfigPanel({ deviceId, deviceName }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { register, handleSubmit, watch, reset } = useForm<SnmpFields>({
     defaultValues: {
@@ -73,9 +74,27 @@ export default function SNMPConfigPanel({ deviceId, deviceName }: Props) {
       return;
     }
     setLoading(true);
+    setLoadError(null);
     const { data, error } = await supabase.rpc('get_snmp_config', { p_device_id: deviceId });
     if (error) {
       setMeta(null);
+      const msg = error.message || '';
+      if (
+        msg.includes('Could not find the function') ||
+        msg.includes('function public.get_snmp_config') ||
+        error.code === 'PGRST202' ||
+        error.code === '42883'
+      ) {
+        setLoadError(
+          'RPC get_snmp_config no existe en la base. Aplica la migracion supabase/migrations/20261103000005_encrypt_snmp_secrets.sql y configura app.snmp_encryption_key (ver docs/GO_LIVE.md).',
+        );
+      } else if (msg.includes('snmp_encryption_key')) {
+        setLoadError('Falta app.snmp_encryption_key en Postgres. Ver docs/GO_LIVE.md seccion C.');
+      } else if (error.code === '42501') {
+        setLoadError('Sin permiso para ver configuracion SNMP.');
+      } else {
+        setLoadError(msg || 'No se pudo cargar SNMP config');
+      }
     } else if (data) {
       const m = data as Meta;
       setMeta(m);
@@ -128,10 +147,17 @@ export default function SNMPConfigPanel({ deviceId, deviceName }: Props) {
         if (error.code === '42501') toast.error('You do not have permission to manage SNMP config');
         else if (error.message?.includes('snmp_encryption_key')) {
           toast.error('Encryption key not set on database. Ask the administrator to set app.snmp_encryption_key.');
+        } else if (
+          error.message?.includes('Could not find the function') ||
+          error.code === 'PGRST202' ||
+          error.code === '42883'
+        ) {
+          toast.error('RPC upsert_snmp_config missing — apply migration 05 (docs/GO_LIVE.md).');
         } else toast.error(error.message || 'Could not save SNMP config');
         return;
       }
       setMeta(result as Meta);
+      setLoadError(null);
       reset({
         version: data.version,
         community: '',
@@ -158,6 +184,25 @@ export default function SNMPConfigPanel({ deviceId, deviceName }: Props) {
     return (
       <div className="bg-card border border-border rounded-xl p-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
         <Loader2 size={16} className="animate-spin" /> Loading SNMP config…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-card border border-amber-500/40 rounded-xl p-5 space-y-2">
+        <div className="flex items-center gap-2 text-amber-400 text-sm font-semibold">
+          <AlertTriangle size={16} />
+          SNMP no disponible
+        </div>
+        <p className="text-sm text-muted-foreground">{loadError}</p>
+        <button
+          type="button"
+          onClick={() => load()}
+          className="text-xs text-primary hover:underline"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
