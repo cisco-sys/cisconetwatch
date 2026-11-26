@@ -1,33 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { adminClient, assertCollectorKey, assertOrgExists } from '@/lib/server/collector-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * Zabbix-proxy style: LAN collector registers / heartbeats into `collectors`.
- * Auth: X-Collector-Key == COLLECTOR_API_KEY
+ * Auth: X-Collector-Key (constant-time) == COLLECTOR_API_KEY
+ * orgId in body must exist in public.organizations.
  */
 function fail(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function assertCollectorKey(req: Request): boolean {
-  const expected = process.env.COLLECTOR_API_KEY;
-  const got = req.headers.get('x-collector-key') ?? '';
-  return Boolean(expected && got && got === expected);
-}
-
 export async function POST(req: Request) {
   if (!assertCollectorKey(req)) return fail(401, 'X-Collector-Key invalida.');
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return fail(503, 'Service role no configurado.');
-
-  const admin = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = adminClient();
+  if (!admin) return fail(503, 'Service role no configurado.');
 
   let body: {
     name?: string;
@@ -52,6 +42,9 @@ export async function POST(req: Request) {
   const orgId = body.orgId;
   if (!host) return fail(400, 'host requerido.');
   if (!orgId) return fail(400, 'orgId requerido.');
+  if (!(await assertOrgExists(admin, orgId))) {
+    return fail(403, 'orgId no corresponde a una organizacion valida.');
+  }
 
   const protocol = body.protocol ?? 'ICMP';
   const status = body.status ?? 'active';

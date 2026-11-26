@@ -1,34 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { adminClient, assertCollectorKey, assertOrgExists } from '@/lib/server/collector-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Zabbix-style poll results: LAN collector reports reachability for inventory devices.
- * Auth: X-Collector-Key
+ * Poll results from LAN collector.
+ * Auth: X-Collector-Key (constant-time)
  * Body: { orgId, results: [{ ip, isUp, rttMs? }] }
+ * orgId must exist; device updates scoped to that org_id.
  */
 function fail(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function assertCollectorKey(req: Request): boolean {
-  const expected = process.env.COLLECTOR_API_KEY;
-  const got = req.headers.get('x-collector-key') ?? '';
-  return Boolean(expected && got && got === expected);
-}
-
 export async function POST(req: Request) {
-  if (!assertCollectorKey(req)) return fail(401, 'X-Collector-Key invalida.');
+  if (!assertCollectorKey(req)) return fail(401, 'X-Collector-Key invalida.';
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return fail(503, 'Service role no configurado.');
-
-  const admin = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = adminClient();
+  if (!admin) return fail(503, 'Service role no configurado.');
 
   let body: {
     orgId?: string;
@@ -43,6 +33,9 @@ export async function POST(req: Request) {
   const orgId = body.orgId;
   const results = body.results ?? [];
   if (!orgId) return fail(400, 'orgId requerido.');
+  if (!(await assertOrgExists(admin, orgId))) {
+    return fail(403, 'orgId no corresponde a una organizacion valida.');
+  }
   if (!results.length) return NextResponse.json({ updated: 0 });
 
   let updated = 0;
