@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { adminClient, assertCollectorKey, assertOrgExists } from '@/lib/server/collector-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,17 +8,8 @@ function fail(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function adminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-}
-
 async function authorize(req: Request) {
-  const collectorKey = process.env.COLLECTOR_API_KEY;
-  const headerKey = req.headers.get('x-collector-key') ?? '';
-  if (collectorKey && headerKey && headerKey === collectorKey) {
+  if (assertCollectorKey(req)) {
     return { mode: 'collector' as const, userId: null as string | null, orgId: null as string | null };
   }
 
@@ -139,6 +130,9 @@ export async function POST(req: Request) {
     if (!cidr) return fail(400, 'cidr requerido.');
     const orgId = body.orgId ?? auth.orgId;
     if (!orgId) return fail(400, 'orgId requerido.');
+    if (!(await assertOrgExists(admin, orgId))) {
+      return fail(403, 'orgId no corresponde a una organizacion valida.');
+    }
 
     const insert: Record<string, unknown> = {
       org_id: orgId,
@@ -183,6 +177,9 @@ export async function POST(req: Request) {
     if (!cidr) return fail(400, 'cidr requerido (ej. 192.168.10.0/24).');
     const orgId = body.orgId ?? auth.orgId;
     if (!orgId) return fail(400, 'orgId requerido.');
+    if (!(await assertOrgExists(admin, orgId))) {
+      return fail(403, 'orgId no corresponde a una organizacion valida.');
+    }
 
     const { data, error } = await admin
       .from('discovery_scans')
